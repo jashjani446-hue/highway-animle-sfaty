@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoadGuardian AI - Dashboard</title>
+    <!-- TensorFlow.js and COCO-SSD Model -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #121212;
+            color: white;
+            text-align: center;
+            margin: 0;
+            padding: 15px;
+        }
+        h1 {
+            color: #00E676;
+            margin-top: 5px;
+            margin-bottom: 2px;
+            font-size: 24px;
+        }
+        p.subtitle {
+            color: #aaa;
+            margin-top: 0;
+            font-size: 13px;
+        }
+
+        /* Nav Tabs */
+        .tab-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .tab-btn {
+            background-color: #222;
+            color: #888;
+            border: 2px solid #444;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: 0.3s;
+            flex: 1;
+            max-width: 200px;
+        }
+        .tab-btn.active {
+            background-color: #00E676;
+            color: #000;
+            border-color: #00E676;
+        }
+
+        /* Page Content */
+        .page-content { display: none; }
+        .page-content.active { display: block; }
+
+        /* Status Header */
+        #status-box {
+            padding: 12px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 8px;
+            display: inline-block;
+            width: 100%;
+            max-width: 480px;
+            background-color: #2e7d32;
+            color: white;
+            transition: 0.3s;
+            margin-bottom: 15px;
+        }
+        .danger {
+            background-color: #c62828 !important;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        /* Camera View */
+        #webcam-container {
+            position: relative;
+            display: inline-block;
+            border: 3px solid #333;
+            border-radius: 12px;
+            overflow: hidden;
+            background-color: #000;
+            width: 100%;
+            max-width: 480px;
+        }
+        video {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        /* Phone SMS Interface Styling */
+        .phone-container {
+            background-color: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 16px;
+            padding: 15px;
+            margin: 10px auto;
+            max-width: 480px;
+            text-align: left;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .phone-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .phone-header .sender {
+            font-weight: bold;
+            color: #00E676;
+            font-size: 15px;
+        }
+
+        /* Message List Container */
+        #message-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        /* Individual SMS Card */
+        .sms-item {
+            background-color: #263238;
+            border-left: 4px solid #29b6f6;
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .sms-item.alert-mode {
+            background-color: #3e1212;
+            border-left: 4px solid #ff5252;
+        }
+        .sms-time {
+            font-size: 11px;
+            color: #aaa;
+            align-self: flex-end;
+        }
+        .sms-text {
+            font-size: 14px;
+            color: #fff;
+            line-height: 1.4;
+            word-break: break-word;
+        }
+
+        .copy-btn-small {
+            background-color: #00E676;
+            color: #000;
+            border: none;
+            padding: 6px 12px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            align-self: flex-end;
+            transition: 0.2s;
+        }
+        .copy-btn-small:active { background-color: #69f0ae; }
+
+        .clear-btn {
+            background-color: #333;
+            color: #ff5252;
+            border: 1px solid #ff5252;
+            padding: 8px;
+            font-size: 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+
+        .toast {
+            visibility: hidden;
+            min-width: 200px;
+            background-color: #00E676;
+            color: #000;
+            text-align: center;
+            border-radius: 20px;
+            padding: 10px;
+            position: fixed;
+            z-index: 100;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-weight: bold;
+        }
+        .toast.show {
+            visibility: visible;
+            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        }
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+    </style>
+</head>
+<body>
+
+    <h1>RoadGuardian AI</h1>
+    <p class="subtitle">Rajkot-Gondal Highway Safety System</p>
+
+    <!-- Option Navigation -->
+    <div class="tab-container">
+        <button class="tab-btn active" onclick="switchTab('camera')">📹 CAMERA</button>
+        <button class="tab-btn" onclick="switchTab('notifications')">💬 MESSAGES</button>
+    </div>
+
+    <!-- Live Status Header -->
+    <div id="status-box">SAFE: ROAD CLEAR</div>
+
+    <!-- PAGE 1: CAMERA -->
+    <div id="camera-page" class="page-content active">
+        <div id="webcam-container">
+            <video id="webcam" autoplay playsinline muted></video>
+        </div>
+    </div>
+
+    <!-- PAGE 2: SAVED PHONE MESSAGES -->
+    <div id="notifications-page" class="page-content">
+        
+        <div class="phone-container">
+            <div class="phone-header">
+                <span class="sender">📱 Saved Messages History</span>
+            </div>
+
+            <!-- Saved Messages will be inserted here dynamically -->
+            <div id="message-list">
+                <!-- Fallback empty text -->
+                <div style="color: #666; text-align: center; padding: 20px;" id="empty-msg">No messages recorded yet.</div>
+            </div>
+
+            <button class="clear-btn" onclick="clearAllMessages()">🗑️ CLEAR ALL SAVED MESSAGES</button>
+        </div>
+
+    </div>
+
+    <div id="toast" class="toast">Copied to Clipboard!</div>
+
+    <script>
+        const FIREBASE_URL = "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian/alert.json";
+
+        const video = document.getElementById('webcam');
+        const statusBox = document.getElementById('status-box');
+        const messageList = document.getElementById('message-list');
+        const emptyMsg = document.getElementById('empty-msg');
+        
+        let model = null;
+        let lastAlertState = -1;
+        let isCameraActive = true;
+        let savedMessages = JSON.parse(localStorage.getItem('roadGuardian_messages')) || [];
+
+        // 1. Tab Switcher
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.page-content').forEach(page => page.classList.remove('active'));
+
+            if (tabName === 'camera') {
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+                document.getElementById('camera-page').classList.add('active');
+                isCameraActive = true;
+            } else {
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                document.getElementById('notifications-page').classList.add('active');
+                isCameraActive = false;
+                renderSavedMessages();
+            }
+        }
+
+        // 2. Camera Setup
+        async function setupWebcam() {
+            return new Promise((resolve, reject) => {
+                navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" },
+                    audio: false
+                }).then((stream) => {
+                    video.srcObject = stream;
+                    video.onloadedmetadata = () => resolve();
+                }).catch((err) => reject(err));
+            });
+        }
+
+        // 3. Firebase Update
+        async function updateFirebase(alertState) {
+            if (alertState === lastAlertState) return;
+            lastAlertState = alertState;
+
+            try {
+                await fetch(FIREBASE_URL, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(alertState)
+                });
+            } catch (error) {
+                console.error("Firebase Update Failed:", error);
+            }
+        }
+
+        // 4. Save New Message to Permanent Storage
+        function addMessageToStorage(msgText, isAlert) {
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const date = new Date().toLocaleDateString();
+
+            // Check if same message as the latest one to prevent duplicating identical spam
+            if (savedMessages.length > 0 && savedMessages[0].text === msgText) {
+                return;
+            }
+
+            const newMsgObj = {
+                id: Date.now(),
+                text: msgText,
+                time: `${date} ${time}`,
+                isAlert: isAlert
+            };
+
+            // Insert at beginning (newest first)
+            savedMessages.unshift(newMsgObj);
+            localStorage.setItem('roadGuardian_messages', JSON.stringify(savedMessages));
+        }
+
+        // 5. Render Saved Messages on Tab
+        function renderSavedMessages() {
+            if (savedMessages.length === 0) {
+                messageList.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">No messages recorded yet.</div>';
+                return;
+            }
+
+            let html = '';
+            savedMessages.forEach(msg => {
+                const alertClass = msg.isAlert ? 'alert-mode' : '';
+                html += `
+                    <div class="sms-item ${alertClass}">
+                        <div class="sms-time">🕒 ${msg.time}</div>
+                        <div class="sms-text" id="msg-${msg.id}">${msg.text}</div>
+                        <button class="copy-btn-small" onclick="copySpecificMessage('msg-${msg.id}')">📋 COPY</button>
+                    </div>
+                `;
+            });
+
+            messageList.innerHTML = html;
+        }
+
+        // 6. AI Detection & Auto-Save
+        const targetAnimals = ['cat', 'dog', 'cow', 'horse', 'sheep', 'elephant', 'bear', 'zebra', 'giraffe'];
+
+        async function detectFrame() {
+            if (model && isCameraActive) {
+                const predictions = await model.detect(video);
+                let isAnimalDetected = false;
+                let detectedName = "";
+
+                predictions.forEach(prediction => {
+                    if (targetAnimals.includes(prediction.class.toLowerCase()) && prediction.score > 0.5) {
+                        isAnimalDetected = true;
+                        detectedName = prediction.class.toUpperCase();
+                    }
+                });
+
+                if (isAnimalDetected) {
+                    const alertMsg = `🚨 ALERT: ${detectedName} detected on Rajkot-Gondal Highway! Drive carefully. RoadGuardian Safety System activated.`;
+                    
+                    statusBox.innerText = `WARNING: ${detectedName} DETECTED!`;
+                    statusBox.classList.add('danger');
+                    
+                    addMessageToStorage(alertMsg, true);
+                    updateFirebase(1);
+                } else {
+                    const safeMsg = `✅ SAFE: Road is clear on Rajkot-Gondal Highway. No animals detected. Have a safe journey!`;
+                    
+                    statusBox.innerText = "SAFE: ROAD CLEAR";
+                    statusBox.classList.remove('danger');
+                    
+                    addMessageToStorage(safeMsg, false);
+                    updateFirebase(0);
+                }
+            }
+            requestAnimationFrame(detectFrame);
+        }
+
+        // 7. Copy Specific Message Function
+        function copySpecificMessage(elementId) {
+            const text = document.getElementById(elementId).innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                showToast("Message Copied! 📱");
+            });
+        }
+
+        function clearAllMessages() {
+            if (confirm("Are you sure you want to clear all saved messages?")) {
+                savedMessages = [];
+                localStorage.removeItem('roadGuardian_messages');
+                renderSavedMessages();
+                showToast("All Messages Cleared!");
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById("toast");
+            toast.innerText = msg;
+            toast.className = "toast show";
+            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+        }
+
+        // 8. Initialize
+        async function init() {
+            statusBox.innerText = "Loading AI Model...";
+            try {
+                await setupWebcam();
+                model = await cocoSsd.load();
+                statusBox.innerText = "SAFE: ROAD CLEAR";
+                detectFrame();
+            } catch (err) {
+                statusBox.innerText = "CAMERA ERROR / NO PERMISSION";
+            }
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
