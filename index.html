@@ -275,7 +275,7 @@
 
         // EmailJS Credentials
         const EMAILJS_SERVICE_ID = "service_9t8ppxg";
-        const EMAILJS_TEMPLATE_ID = "Template_1efdzc9"; // Updated Template ID
+        const EMAILJS_TEMPLATE_ID = "template_1efdzc9"; // Original Template ID
         const EMAILJS_PUBLIC_KEY = "ZXgCOupaENPcCchAD";
 
         (function(){
@@ -342,7 +342,6 @@
 
         // 4. Send Gmail Alert with Photo Attachment
         function sendAnimalGmailAlert(detectedAnimal) {
-            // Draw camera frame to canvas
             photoCanvas.width = video.videoWidth || 640;
             photoCanvas.height = video.videoHeight || 480;
             const ctx = photoCanvas.getContext('2d');
@@ -438,7 +437,7 @@
 
                     updateFirebase(1);
 
-                    // Prevent Email Spamming (Send max 1 email every 15 seconds)
+                    // Send max 1 email every 15 seconds
                     if (Date.now() - lastEmailSentTime > 15000) {
                         sendAnimalGmailAlert(detectedName);
                         lastEmailSentTime = Date.now();
