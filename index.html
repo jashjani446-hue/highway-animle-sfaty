@@ -3,479 +3,482 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Unified Forest & Highway Safety Dashboard</title>
+    <title>RoadGuardian AI - Gmail Alert System</title>
     <!-- TensorFlow.js and COCO-SSD Model -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <!-- EmailJS SDK -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * { box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: #121212;
-            color: #ffffff;
+            color: white;
             text-align: center;
-            padding: 10px;
+            margin: 0;
+            padding: 15px;
         }
-        h1 { color: #00E676; margin: 10px 0 2px 0; font-size: 22px; }
-        p.subtitle { color: #aaa; font-size: 12px; margin-bottom: 12px; }
+        h1 {
+            color: #00E676;
+            margin-top: 5px;
+            margin-bottom: 2px;
+            font-size: 24px;
+        }
+        p.subtitle {
+            color: #aaa;
+            margin-top: 0;
+            font-size: 13px;
+        }
 
-        /* Navigation Bar */
-        nav {
-            background: #1f1f1f;
+        /* Nav Tabs */
+        .tab-container {
             display: flex;
-            justify-content: space-around;
-            border-bottom: 2px solid #333;
-            border-radius: 8px;
-            overflow-x: auto;
+            justify-content: center;
+            gap: 10px;
             margin-bottom: 15px;
         }
-        nav button {
-            background: none;
-            border: none;
-            color: #aaa;
-            padding: 12px 10px;
-            font-size: 13px;
+        .tab-btn {
+            background-color: #222;
+            color: #888;
+            border: 2px solid #444;
+            padding: 10px 20px;
+            font-size: 14px;
             font-weight: bold;
+            border-radius: 25px;
             cursor: pointer;
-            white-space: nowrap;
+            transition: 0.3s;
+            flex: 1;
+            max-width: 200px;
         }
-        nav button.active {
-            color: #00e676;
-            border-bottom: 3px solid #00e676;
+        .tab-btn.active {
+            background-color: #00E676;
+            color: #000;
+            border-color: #00E676;
         }
 
-        /* Tab Content */
-        .tab-content { display: none; padding: 10px; max-width: 480px; margin: 0 auto; }
-        .tab-content.active { display: block; }
+        /* Page Content */
+        .page-content { display: none; }
+        .page-content.active { display: block; }
 
-        /* Status & Cards */
-        .card { background: #1e1e1e; border-radius: 12px; padding: 15px; margin-top: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-        .status-box { padding: 15px; font-size: 16px; font-weight: bold; border-radius: 8px; margin-bottom: 15px; }
-        .safe { background-color: #2e7d32; color: #ffffff; }
-        .alert-bg { background-color: #c62828; color: #ffffff; animation: pulse 0.8s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-
-        /* Camera Select Dropdowns */
-        .cam-select-group {
-            margin-bottom: 12px;
-            text-align: left;
+        /* Status Header */
+        #status-box {
+            padding: 12px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 8px;
+            display: inline-block;
+            width: 100%;
+            max-width: 480px;
+            background-color: #2e7d32;
+            color: white;
+            transition: 0.3s;
+            margin-bottom: 10px;
         }
-        .cam-select-group label {
-            display: block;
-            font-size: 12px;
-            color: #00e676;
-            margin-bottom: 4px;
+        .danger {
+            background-color: #c62828 !important;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        #emailStatus {
+            font-size: 13px;
+            color: #ffeb3b;
+            margin-bottom: 10px;
             font-weight: bold;
         }
-        .cam-select {
-            width: 100%;
-            padding: 8px 10px;
-            background: #2a2a2a;
-            color: #fff;
-            border: 1px solid #444;
-            border-radius: 6px;
-            font-size: 13px;
-            outline: none;
+
+        /* Test Email Button Styling */
+        .test-btn {
+            background-color: #2196F3;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            margin-bottom: 15px;
+            font-weight: bold;
+            font-size: 14px;
+            box-shadow: 0 4px 10px rgba(33, 150, 243, 0.3);
+            transition: 0.2s;
+        }
+        .test-btn:active {
+            transform: scale(0.95);
         }
 
-        /* Video Container */
-        .video-container {
+        /* Camera View */
+        #webcam-container {
             position: relative;
-            border: 2px solid #333;
-            border-radius: 10px;
+            display: inline-block;
+            border: 3px solid #333;
+            border-radius: 12px;
             overflow: hidden;
-            background: #000;
+            background-color: #000;
             width: 100%;
+            max-width: 480px;
         }
-        video { width: 100%; display: block; }
+        video {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
 
-        /* Logs & Messages Container */
-        .list-container {
-            background: #181818;
+        /* Email Log Styling */
+        .phone-container {
+            background-color: #1a1a1a;
             border: 1px solid #333;
-            border-radius: 8px;
-            padding: 10px;
-            max-height: 380px;
-            overflow-y: auto;
+            border-radius: 16px;
+            padding: 15px;
+            margin: 10px auto;
+            max-width: 480px;
             text-align: left;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
-        .item-card {
-            background: #263238;
-            border-left: 4px solid #00e676;
+        .phone-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .phone-header .sender {
+            font-weight: bold;
+            color: #00E676;
+            font-size: 15px;
+        }
+
+        /* Message List Container */
+        #message-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        /* Individual Log Card */
+        .sms-item {
+            background-color: #263238;
+            border-left: 4px solid #29b6f6;
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .sms-item.alert-mode {
+            background-color: #3e1212;
+            border-left: 4px solid #ff5252;
+        }
+        .sms-time {
+            font-size: 11px;
+            color: #aaa;
+            align-self: flex-end;
+        }
+        .sms-text {
+            font-size: 14px;
+            color: #fff;
+            line-height: 1.4;
+            word-break: break-word;
+        }
+
+        .clear-btn {
+            background-color: #333;
+            color: #ff5252;
+            border: 1px solid #ff5252;
+            padding: 8px;
+            font-size: 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+
+        .toast {
+            visibility: hidden;
+            min-width: 200px;
+            background-color: #00E676;
+            color: #000;
+            text-align: center;
+            border-radius: 20px;
             padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 4px;
+            position: fixed;
+            z-index: 100;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-weight: bold;
         }
-        .item-card.alert-item { border-left-color: #ff5252; background: #3e1212; }
-        .item-time { font-size: 11px; color: #aaa; margin-bottom: 4px; }
-        .item-text { font-size: 13px; line-height: 1.4; }
-
-        /* Photo Gallery Grid */
-        .photo-grid { display: flex; flex-direction: column; gap: 12px; }
-        .photo-card { background: #222; border: 1px solid #444; border-radius: 8px; padding: 10px; text-align: left; }
-        .photo-card img { width: 100%; border-radius: 6px; border: 1px solid #ff5252; margin-top: 6px; }
-
-        /* Buttons */
-        .btn-clear {
-            background: #dc3545; color: #fff; border: none; padding: 10px;
-            font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%; margin-top: 10px;
+        .toast.show {
+            visibility: visible;
+            animation: fadein 0.5s, fadeout 0.5s 2.5s;
         }
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
     </style>
 </head>
 <body>
 
-    <h1>🛡️ Integrated Monitoring System</h1>
-    <p class="subtitle">Gir Forest Guard & RoadGuardian AI System</p>
+    <h1>RoadGuardian AI</h1>
+    <p class="subtitle">Rajkot-Gondal Highway Safety System</p>
 
-    <nav>
-        <button id="btn-forest" class="active" onclick="switchPage('forest')">🌲 Forest</button>
-        <button id="btn-highway" onclick="switchPage('highway')">🛣️ Highway</button>
-        <button id="btn-photos" onclick="switchPage('photos')">📸 Photos</button>
-        <button id="btn-messages" onclick="switchPage('messages')">💬 Logs</button>
-    </nav>
+    <!-- Navigation -->
+    <div class="tab-container">
+        <button class="tab-btn active" onclick="switchTab('camera')">📹 CAMERA</button>
+        <button class="tab-btn" onclick="switchTab('notifications')">📧 GMAIL LOGS</button>
+    </div>
 
-    <!-- 1. GIR FOREST MONITORING PAGE -->
-    <div id="forest" class="tab-content active">
-        <h2>🌲 Gir Forest Live Guard</h2>
-        <div class="card">
-            <div id="forestStatus" class="status-box safe">CONNECTING TO CLOUD...</div>
-            
-            <!-- Forest Camera Selector -->
-            <div class="cam-select-group">
-                <label for="forestCamSelect">📷 Select Forest Camera:</label>
-                <select id="forestCamSelect" class="cam-select" onchange="changeForestCamera(this.value)"></select>
-            </div>
+    <!-- Live Status Header -->
+    <div id="status-box">SAFE: ROAD CLEAR</div>
+    <div id="emailStatus">📧 Email Alert Ready</div>
 
-            <p style="font-size: 12px; color: #aaa; margin-bottom: 8px;">🎤 Listening for Gunshot Sound:</p>
-            <div class="video-container">
-                <video id="forestCam" autoplay playsinline muted></video>
-            </div>
+    <!-- Manual Test Button -->
+    <div>
+        <button class="test-btn" onclick="testEmailDirectly()">🧪 SEND TEST EMAIL</button>
+    </div>
+
+    <!-- PAGE 1: CAMERA -->
+    <div id="camera-page" class="page-content active">
+        <div id="webcam-container">
+            <video id="webcam" autoplay playsinline muted></video>
         </div>
     </div>
 
-    <!-- 2. HIGHWAY AI MONITORING PAGE -->
-    <div id="highway" class="tab-content">
-        <h2>🛣️ RoadGuardian AI</h2>
-        <div class="card">
-            <div id="highwayStatus" class="status-box safe">LOADING AI MODEL...</div>
-
-            <!-- Highway Camera Selector -->
-            <div class="cam-select-group">
-                <label for="highwayCamSelect">📷 Select Highway Camera:</label>
-                <select id="highwayCamSelect" class="cam-select" onchange="changeHighwayCamera(this.value)"></select>
+    <!-- PAGE 2: SAVED EMAIL LOGS -->
+    <div id="notifications-page" class="page-content">
+        <div class="phone-container">
+            <div class="phone-header">
+                <span class="sender">✉️ Gmail Alert Logs</span>
             </div>
 
-            <div class="video-container">
-                <video id="highwayCam" autoplay playsinline muted></video>
+            <div id="message-list">
+                <div style="color: #666; text-align: center; padding: 20px;" id="empty-msg">No Gmail alerts sent yet.</div>
             </div>
-        </div>
-    </div>
 
-    <!-- 3. FOREST CAPTURED PHOTOS PAGE -->
-    <div id="photos" class="tab-content">
-        <h2>📸 Captured Gunshot Photos</h2>
-        <div class="card">
-            <div id="photoLog" class="photo-grid">
-                <p style="color: #666;">કોઈ ફોટો કેપ્ચર થયો નથી.</p>
-            </div>
-            <button class="btn-clear" onclick="clearPhotoLogs()">🗑️ Clear Photo History</button>
-        </div>
-    </div>
-
-    <!-- 4. SYSTEM SMS / LOG MESSAGES PAGE -->
-    <div id="messages" class="tab-content">
-        <h2>💬 SMS & Alert Logs</h2>
-        <div class="card">
-            <div class="list-container" id="smsLogContainer"></div>
-            <button class="btn-clear" onclick="clearAllLogs()">🗑️ Clear All Logs</button>
+            <button class="clear-btn" onclick="clearAllMessages()">🗑️ CLEAR ALL LOGS</button>
         </div>
     </div>
 
     <canvas id="photoCanvas" style="display:none;"></canvas>
+    <div id="toast" class="toast">Action Completed!</div>
 
-    <!-- Firebase SDK v10.7.1 -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+    <script>
+        const FIREBASE_URL = "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian/alert.json";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyCCNe68w8w9MqiZ3bBBdSa9D9G5wT9CyHM",
-            authDomain: "fore-d68a4.firebaseapp.com",
-            databaseURL: "https://fore-d68a4-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "fore-d68a4",
-            storageBucket: "fore-d68a4.firebasestorage.app",
-            messagingSenderId: "948704983419",
-            appId: "1:948704983419:web:64efa58ae654b21e5fa5de"
-        };
+        // EmailJS Credentials
+        const EMAILJS_SERVICE_ID = "service_9t8ppxg";
+        const EMAILJS_TEMPLATE_ID = "Template_1efdzc9"; // Updated Template ID
+        const EMAILJS_PUBLIC_KEY = "ZXgCOupaENPcCchAD";
 
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
+        (function(){
+            emailjs.init(EMAILJS_PUBLIC_KEY);
+        })();
 
-        // UI References
-        const forestBox = document.getElementById('forestStatus');
-        const highwayBox = document.getElementById('highwayStatus');
-        const forestCam = document.getElementById('forestCam');
-        const highwayCam = document.getElementById('highwayCam');
-        const forestCamSelect = document.getElementById('forestCamSelect');
-        const highwayCamSelect = document.getElementById('highwayCamSelect');
-        const photoLog = document.getElementById('photoLog');
-        const smsLogContainer = document.getElementById('smsLogContainer');
+        const video = document.getElementById('webcam');
+        const statusBox = document.getElementById('status-box');
+        const emailStatus = document.getElementById('emailStatus');
+        const messageList = document.getElementById('message-list');
         const photoCanvas = document.getElementById('photoCanvas');
 
-        let cocoModel = null;
-        let isAudioTriggered = false;
-        let forestStream = null;
-        let highwayStream = null;
+        let model = null;
+        let lastAlertState = -1;
+        let isCameraActive = true;
+        let lastEmailSentTime = 0;
+        let savedMessages = JSON.parse(localStorage.getItem('roadGuardian_email_logs')) || [];
 
-        let systemLogs = JSON.parse(localStorage.getItem('sys_logs')) || [];
-        let capturedPhotos = JSON.parse(localStorage.getItem('captured_photos')) || [];
+        // 1. Tab Switcher
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.page-content').forEach(page => page.classList.remove('active'));
 
-        // Tab Switcher
-        window.switchPage = function(pageId) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
-            document.getElementById(pageId).classList.add('active');
-            document.getElementById(`btn-${pageId}`).classList.add('active');
-            if (pageId === 'photos') renderPhotoLogs();
-            if (pageId === 'messages') renderSystemLogs();
-        };
+            if (tabName === 'camera') {
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+                document.getElementById('camera-page').classList.add('active');
+                isCameraActive = true;
+            } else {
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                document.getElementById('notifications-page').classList.add('active');
+                isCameraActive = false;
+                renderSavedMessages();
+            }
+        }
 
-        // Populate Camera Dropdowns
-        async function getAvailableCameras() {
+        // 2. Setup Webcam
+        async function setupWebcam() {
+            return new Promise((resolve, reject) => {
+                navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" },
+                    audio: false
+                }).then((stream) => {
+                    video.srcObject = stream;
+                    video.onloadedmetadata = () => resolve();
+                }).catch((err) => reject(err));
+            });
+        }
+
+        // 3. Update Firebase
+        async function updateFirebase(alertState) {
+            if (alertState === lastAlertState) return;
+            lastAlertState = alertState;
+
             try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const videoDevices = devices.filter(device => device.kind === 'videoinput');
-
-                forestCamSelect.innerHTML = '';
-                highwayCamSelect.innerHTML = '';
-
-                if (videoDevices.length === 0) {
-                    const opt = document.createElement('option');
-                    opt.text = "No Camera Found";
-                    forestCamSelect.add(opt);
-                    highwayCamSelect.add(opt.cloneNode(true));
-                    return;
-                }
-
-                videoDevices.forEach((device, index) => {
-                    const label = device.label || `Camera ${index + 1}`;
-                    const opt1 = new Option(label, device.deviceId);
-                    const opt2 = new Option(label, device.deviceId);
-                    forestCamSelect.add(opt1);
-                    highwayCamSelect.add(opt2);
+                await fetch(FIREBASE_URL, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(alertState)
                 });
-
-                // Set default cameras if available
-                if (videoDevices.length > 1) {
-                    highwayCamSelect.selectedIndex = 1; // Pick second camera if present
-                }
-            } catch (err) {
-                console.error("Error listing cameras:", err);
+            } catch (error) {
+                console.error("Firebase Update Failed:", error);
             }
         }
 
-        // Start Forest Camera
-        async function startForestCamera(deviceId = null) {
-            if (forestStream) {
-                forestStream.getTracks().forEach(track => track.stop());
-            }
-
-            const constraints = {
-                audio: true,
-                video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: "environment" }
-            };
-
-            try {
-                forestStream = await navigator.mediaDevices.getUserMedia(constraints);
-                forestCam.srcObject = forestStream;
-                setupSoundDetection(forestStream);
-            } catch (err) {
-                forestBox.innerText = "❌ Forest Camera Error";
-            }
-        }
-
-        // Start Highway Camera
-        async function startHighwayCamera(deviceId = null) {
-            if (highwayStream) {
-                highwayStream.getTracks().forEach(track => track.stop());
-            }
-
-            const constraints = {
-                video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: "environment" }
-            };
-
-            try {
-                highwayStream = await navigator.mediaDevices.getUserMedia(constraints);
-                highwayCam.srcObject = highwayStream;
-            } catch (err) {
-                highwayBox.innerText = "❌ Highway Camera Error";
-            }
-        }
-
-        window.changeForestCamera = function(deviceId) {
-            startForestCamera(deviceId);
-        };
-
-        window.changeHighwayCamera = function(deviceId) {
-            startHighwayCamera(deviceId);
-        };
-
-        // Sound Detection (Mobile Cam Mic for Gunshot)
-        function setupSoundDetection(stream) {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const analyser = audioContext.createAnalyser();
-            const mic = audioContext.createMediaStreamSource(stream);
-            analyser.fftSize = 256;
-            mic.connect(analyser);
-
-            const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-            function checkNoise() {
-                analyser.getByteFrequencyData(dataArray);
-                let volume = Math.max(...dataArray);
-
-                // High Volume Spike Trigger (>220)
-                if (volume > 220 && !isAudioTriggered) {
-                    isAudioTriggered = true;
-                    triggerGunshotEvent();
-                }
-                requestAnimationFrame(checkNoise);
-            }
-            checkNoise();
-        }
-
-        // Trigger Gunshot Event & Photo Capture
-        function triggerGunshotEvent() {
-            forestBox.innerText = "⚠️ ALERT: GUNSHOT DETECTED!";
-            forestBox.className = "status-box alert-bg";
-
-            // Photo Capture from Forest Cam
-            photoCanvas.width = forestCam.videoWidth || 640;
-            photoCanvas.height = forestCam.videoHeight || 480;
+        // 4. Send Gmail Alert with Photo Attachment
+        function sendAnimalGmailAlert(detectedAnimal) {
+            // Draw camera frame to canvas
+            photoCanvas.width = video.videoWidth || 640;
+            photoCanvas.height = video.videoHeight || 480;
             const ctx = photoCanvas.getContext('2d');
-            ctx.drawImage(forestCam, 0, 0, photoCanvas.width, photoCanvas.height);
-            const imageBase64 = photoCanvas.toDataURL('image/jpeg');
-
-            const timestamp = new Date().toLocaleString();
+            ctx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
             
-            // Save Photo Log
-            capturedPhotos.unshift({ id: Date.now(), image: imageBase64, time: timestamp });
-            localStorage.setItem('captured_photos', JSON.stringify(capturedPhotos));
+            const imageBase64 = photoCanvas.toDataURL('image/jpeg');
+            const time = new Date().toLocaleString();
 
-            // Add SMS Alert Log
-            addLog(`ALERT: Gunshot sound detected! Photo captured at ${timestamp}`, true);
+            emailStatus.innerText = "⏳ Sending Gmail alert with photo...";
 
-            setTimeout(() => {
-                isAudioTriggered = false;
-                forestBox.innerText = "SAFE: NO GUNSHOT DETECTED";
-                forestBox.className = "status-box safe";
-            }, 6000);
+            const alertMsg = `🚨 ALERT: ${detectedAnimal} detected on Rajkot-Gondal Highway at ${time}. Drive with caution!`;
+
+            const templateParams = {
+                to_name: "Highway Patrol Officer",
+                alert_time: time,
+                image_data: imageBase64,
+                message: alertMsg
+            };
+
+            emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
+                .then(function() {
+                    emailStatus.innerText = "✅ Gmail alert sent successfully!";
+                    addMessageToStorage(`✉️ Gmail sent: ${alertMsg}`, true);
+                    showToast("Email Sent!");
+                }, function(error) {
+                    emailStatus.innerText = "❌ Email failed to send.";
+                    addMessageToStorage(`❌ Gmail failed: ${error.text || 'Error'}`, true);
+                    showToast("Email Failed!");
+                });
         }
 
-        // Firebase Realtime Status Listener (Forest)
-        const statusRef = ref(db, '/forest/status');
-        onValue(statusRef, (snapshot) => {
-            const val = snapshot.val();
-            if (val === 1) {
-                forestBox.innerHTML = "⚠️ ALERT: GUNSHOT DETECTED!";
-                forestBox.className = "status-box alert-bg";
-            } else if (val === 0) {
-                forestBox.innerHTML = "SAFE: NO GUNSHOT DETECTED";
-                forestBox.className = "status-box safe";
+        // 5. Manual Direct Test Trigger
+        function testEmailDirectly() {
+            sendAnimalGmailAlert("MANUAL TEST ANIMAL");
+        }
+
+        // 6. Local Storage Logging
+        function addMessageToStorage(msgText, isAlert) {
+            const time = new Date().toLocaleTimeString();
+            const date = new Date().toLocaleDateString();
+
+            const newMsgObj = {
+                id: Date.now(),
+                text: msgText,
+                time: `${date} ${time}`,
+                isAlert: isAlert
+            };
+
+            savedMessages.unshift(newMsgObj);
+            localStorage.setItem('roadGuardian_email_logs', JSON.stringify(savedMessages));
+        }
+
+        // 7. Render Saved Email Logs
+        function renderSavedMessages() {
+            if (savedMessages.length === 0) {
+                messageList.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">No Gmail alerts sent yet.</div>';
+                return;
             }
-        });
 
-        // Highway AI Animal Detection
-        const targetAnimals = ['cat', 'dog', 'cow', 'horse', 'sheep', 'elephant', 'bear'];
-        async function runHighwayAI() {
-            if (cocoModel && highwayCam.readyState === 4) {
-                const predictions = await cocoModel.detect(highwayCam);
-                let detected = false;
-                let name = "";
+            let html = '';
+            savedMessages.forEach(msg => {
+                const alertClass = msg.isAlert ? 'alert-mode' : '';
+                html += `
+                    <div class="sms-item ${alertClass}">
+                        <div class="sms-time">🕒 ${msg.time}</div>
+                        <div class="sms-text">${msg.text}</div>
+                    </div>
+                `;
+            });
 
-                predictions.forEach(p => {
-                    if (targetAnimals.includes(p.class.toLowerCase()) && p.score > 0.5) {
-                        detected = true;
-                        name = p.class.toUpperCase();
+            messageList.innerHTML = html;
+        }
+
+        // 8. AI Detection Frame Loop
+        const targetAnimals = ['cat', 'dog', 'cow', 'horse', 'sheep', 'elephant', 'bear', 'zebra', 'giraffe'];
+
+        async function detectFrame() {
+            if (model && isCameraActive) {
+                const predictions = await model.detect(video);
+                let isAnimalDetected = false;
+                let detectedName = "";
+
+                predictions.forEach(prediction => {
+                    if (targetAnimals.includes(prediction.class.toLowerCase()) && prediction.score > 0.5) {
+                        isAnimalDetected = true;
+                        detectedName = prediction.class.toUpperCase();
                     }
                 });
 
-                if (detected) {
-                    highwayBox.innerText = `WARNING: ${name} DETECTED!`;
-                    highwayBox.className = "status-box alert-bg";
-                    addLog(`🚨 Highway Alert: ${name} detected on Rajkot-Gondal Highway.`, true);
+                if (isAnimalDetected) {
+                    statusBox.innerText = `WARNING: ${detectedName} DETECTED!`;
+                    statusBox.classList.add('danger');
+
+                    updateFirebase(1);
+
+                    // Prevent Email Spamming (Send max 1 email every 15 seconds)
+                    if (Date.now() - lastEmailSentTime > 15000) {
+                        sendAnimalGmailAlert(detectedName);
+                        lastEmailSentTime = Date.now();
+                    }
                 } else {
-                    highwayBox.innerText = "SAFE: ROAD CLEAR";
-                    highwayBox.className = "status-box safe";
+                    statusBox.innerText = "SAFE: ROAD CLEAR";
+                    statusBox.classList.remove('danger');
+                    updateFirebase(0);
                 }
             }
-            setTimeout(() => requestAnimationFrame(runHighwayAI), 300);
+            requestAnimationFrame(detectFrame);
         }
 
-        // Logs & Photo History System
-        function addLog(text, isAlert = false) {
-            if (systemLogs.length > 0 && systemLogs[0].text === text) return;
-            systemLogs.unshift({ id: Date.now(), text: text, time: new Date().toLocaleTimeString(), isAlert: isAlert });
-            localStorage.setItem('sys_logs', JSON.stringify(systemLogs));
-        }
-
-        function renderPhotoLogs() {
-            if (capturedPhotos.length === 0) {
-                photoLog.innerHTML = "<p style='color: #666;'>કોઈ ફોટો કેપ્ચર થયો નથી.</p>";
-                return;
+        function clearAllMessages() {
+            if (confirm("Are you sure you want to clear all Gmail logs?")) {
+                savedMessages = [];
+                localStorage.removeItem('roadGuardian_email_logs');
+                renderSavedMessages();
+                showToast("All Gmail Logs Cleared!");
             }
-            let html = "";
-            capturedPhotos.forEach(item => {
-                html += `
-                    <div class="photo-card">
-                        <div class="item-time">🕒 ${item.time}</div>
-                        <img src="${item.image}" alt="Gunshot Capture" />
-                    </div>
-                `;
-            });
-            photoLog.innerHTML = html;
         }
 
-        function renderSystemLogs() {
-            if (systemLogs.length === 0) {
-                smsLogContainer.innerHTML = "<p style='color: #666;'>No message logs recorded.</p>";
-                return;
-            }
-            let html = "";
-            systemLogs.forEach(log => {
-                html += `
-                    <div class="item-card ${log.isAlert ? 'alert-item' : ''}">
-                        <div class="item-time">🕒 ${log.time}</div>
-                        <div class="item-text">${log.text}</div>
-                    </div>
-                `;
-            });
-            smsLogContainer.innerHTML = html;
+        function showToast(msg) {
+            const toast = document.getElementById("toast");
+            toast.innerText = msg;
+            toast.className = "toast show";
+            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
         }
 
-        window.clearPhotoLogs = function() {
-            capturedPhotos = [];
-            localStorage.removeItem('captured_photos');
-            renderPhotoLogs();
-        };
-
-        window.clearAllLogs = function() {
-            systemLogs = [];
-            localStorage.removeItem('sys_logs');
-            renderSystemLogs();
-        };
-
-        // Initialize App
+        // 9. Initialize
         async function init() {
-            await startForestCamera();
-            await startHighwayCamera();
-            await getAvailableCameras();
-
-            cocoModel = await cocoSsd.load();
-            highwayBox.innerText = "SAFE: ROAD CLEAR";
-            runHighwayAI();
-            renderSystemLogs();
+            statusBox.innerText = "Loading AI Model...";
+            try {
+                await setupWebcam();
+                model = await cocoSsd.load();
+                statusBox.innerText = "SAFE: ROAD CLEAR";
+                detectFrame();
+            } catch (err) {
+                statusBox.innerText = "CAMERA ERROR / NO PERMISSION";
+            }
         }
 
         window.onload = init;
