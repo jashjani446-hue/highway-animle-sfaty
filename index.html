@@ -275,7 +275,7 @@
 
         // EmailJS Credentials
         const EMAILJS_SERVICE_ID = "service_9t8ppxg";
-        const EMAILJS_TEMPLATE_ID = "template_1efdzc9"; // Original Template ID
+        const EMAILJS_TEMPLATE_ID = "template_1efdzc9"; 
         const EMAILJS_PUBLIC_KEY = "ZXgCOupaENPcCchAD";
 
         (function(){
@@ -340,14 +340,16 @@
             }
         }
 
-        // 4. Send Gmail Alert with Photo Attachment
+        // 4. Send Gmail Alert with Compressed Photo Attachment (< 50KB)
         function sendAnimalGmailAlert(detectedAnimal) {
-            photoCanvas.width = video.videoWidth || 640;
-            photoCanvas.height = video.videoHeight || 480;
+            // Compress frame to 320x240 for EmailJS 50KB limit
+            photoCanvas.width = 320;
+            photoCanvas.height = 240;
             const ctx = photoCanvas.getContext('2d');
             ctx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
             
-            const imageBase64 = photoCanvas.toDataURL('image/jpeg');
+            // Compress image quality to 50%
+            const imageBase64 = photoCanvas.toDataURL('image/jpeg', 0.5);
             const time = new Date().toLocaleString();
 
             emailStatus.innerText = "⏳ Sending Gmail alert with photo...";
