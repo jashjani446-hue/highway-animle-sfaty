@@ -3,206 +3,72 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RoadGuardian AI - Proximity Email System</title>
-    <!-- TensorFlow.js and COCO-SSD Model -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
-    <!-- EmailJS SDK -->
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-
+    <title>RoadGuardian AI - Driver Safety Portal</title>
     <style>
-        * { box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #121212;
-            color: white;
-            text-align: center;
-            margin: 0;
-            padding: 15px;
-        }
-        h1 { color: #00E676; margin-top: 5px; margin-bottom: 2px; font-size: 24px; }
-        p.subtitle { color: #aaa; margin-top: 0; font-size: 13px; }
-
-        .tab-container { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
-        .tab-btn {
-            background-color: #222; color: #888; border: 2px solid #444;
-            padding: 10px 20px; font-size: 14px; font-weight: bold;
-            border-radius: 25px; cursor: pointer; transition: 0.3s; flex: 1; max-width: 200px;
-        }
-        .tab-btn.active { background-color: #00E676; color: #000; border-color: #00E676; }
-
-        .page-content { display: none; }
-        .page-content.active { display: block; }
-
-        #status-box {
-            padding: 12px 20px; font-size: 18px; font-weight: bold;
-            border-radius: 8px; display: inline-block; width: 100%;
-            max-width: 480px; background-color: #2e7d32; color: white; margin-bottom: 5px;
-        }
-        .danger { background-color: #c62828 !important; animation: pulse 1s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
-
-        #distance-info {
-            font-size: 13px; color: #00E676; margin-bottom: 8px; font-weight: bold;
-        }
-        #emailStatus { font-size: 13px; color: #ffeb3b; margin-bottom: 10px; font-weight: bold; }
-
-        .test-btn {
-            background-color: #2196F3; color: white; padding: 10px 20px; border: none;
-            border-radius: 20px; cursor: pointer; margin-bottom: 15px; font-weight: bold; font-size: 14px;
-        }
-
-        #webcam-container {
-            position: relative; display: inline-block; border: 3px solid #333;
-            border-radius: 12px; overflow: hidden; background-color: #000; width: 100%; max-width: 480px;
-        }
-        video { display: block; width: 100%; height: auto; }
-
-        .phone-container {
-            background-color: #1a1a1a; border: 1px solid #333; border-radius: 16px;
-            padding: 15px; margin: 10px auto; max-width: 480px; text-align: left;
-        }
-        .phone-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
-        .phone-header .sender { font-weight: bold; color: #00E676; font-size: 15px; }
-
-        #message-list { display: flex; flex-direction: column; gap: 12px; max-height: 400px; overflow-y: auto; }
-        .sms-item { background-color: #263238; border-left: 4px solid #29b6f6; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-        .sms-item.alert-mode { background-color: #3e1212; border-left: 4px solid #ff5252; }
-        .sms-time { font-size: 11px; color: #aaa; align-self: flex-end; }
-        .sms-text { font-size: 14px; color: #fff; line-height: 1.4; }
-
-        .clear-btn { background-color: #333; color: #ff5252; border: 1px solid #ff5252; padding: 8px; font-size: 12px; border-radius: 6px; cursor: pointer; width: 100%; margin-top: 15px; font-weight: bold; }
-        .toast { visibility: hidden; min-width: 200px; background-color: #00E676; color: #000; text-align: center; border-radius: 20px; padding: 10px; position: fixed; z-index: 100; bottom: 30px; left: 50%; transform: translateX(-50%); font-weight: bold; }
-        .toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
-        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
-        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+        body { font-family: Arial, sans-serif; background-color: #121212; color: white; text-align: center; padding: 20px; }
+        .card { background: #1e1e1e; padding: 20px; border-radius: 12px; max-width: 400px; margin: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        input { width: 90%; padding: 10px; margin: 10px 0; border-radius: 5px; border: 1px solid #444; background: #222; color: white; }
+        button { background: #00E676; color: black; font-weight: bold; padding: 10px 20px; border: none; border-radius: 20px; cursor: pointer; }
+        #status { margin-top: 15px; font-weight: bold; color: #ffeb3b; }
     </style>
 </head>
 <body>
 
-    <h1>RoadGuardian AI</h1>
-    <p class="subtitle">Rajkot-Gondal Highway Safety System</p>
+    <div class="card">
+        <h2>🛡️ RoadGuardian AI</h2>
+        <p>૧૦૦m – ૫૦૦m વિસ્તારમાં પ્રાણીઓનું લાઈવ એલર્ટ મેળવવા તમારો ઈમેઈલ દાખલ કરો.</p>
+        
+        <input type="email" id="userEmail" placeholder="તમારો ઈમેઈલ દાખલ કરો..." required>
+        <button onclick="registerUser()">📍 Register for Location Alerts</button>
 
-    <div class="tab-container">
-        <button class="tab-btn active" onclick="switchTab('camera')">📹 CAMERA</button>
-        <button class="tab-btn" onclick="switchTab('notifications')">📧 GMAIL LOGS</button>
+        <div id="status">માહિતી દાખલ કરો...</div>
     </div>
-
-    <div id="status-box">SAFE: ROAD CLEAR</div>
-    <div id="distance-info">📍 Locating user position...</div>
-    <div id="emailStatus">📧 Email Alert Ready</div>
-
-    <div>
-        <button class="test-btn" onclick="testEmailDirectly()">🧪 SEND TEST EMAIL</button>
-    </div>
-
-    <div id="camera-page" class="page-content active">
-        <div id="webcam-container">
-            <video id="webcam" autoplay playsinline muted></video>
-        </div>
-    </div>
-
-    <div id="notifications-page" class="page-content">
-        <div class="phone-container">
-            <div class="phone-header">
-                <span class="sender">✉️ Gmail Alert Logs</span>
-            </div>
-            <div id="message-list">
-                <div style="color: #666; text-align: center; padding: 20px;" id="empty-msg">No Gmail alerts sent yet.</div>
-            </div>
-            <button class="clear-btn" onclick="clearAllMessages()">🗑️ CLEAR ALL LOGS</button>
-        </div>
-    </div>
-
-    <canvas id="photoCanvas" style="display:none;"></canvas>
-    <div id="toast" class="toast">Action Completed!</div>
 
     <script>
-        const FIREBASE_URL = "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian/alert.json";
+        const FIREBASE_DB = "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/ActiveDrivers";
+        let userId = null;
 
-        const EMAILJS_SERVICE_ID = "service_9t8ppxg";
-        const EMAILJS_TEMPLATE_ID = "template_1efdzc9"; 
-        const EMAILJS_PUBLIC_KEY = "ZXgCOupaENPcCchAD";
+        function registerUser() {
+            const email = document.getElementById('userEmail').value;
+            if(!email || !email.includes('@')) {
+                alert("મહેરબાની કરીને સાચો ઈમેઈલ નાખો!");
+                return;
+            }
 
-        (function(){ emailjs.init(EMAILJS_PUBLIC_KEY); })();
-
-        // 📍 CAMERA SENSOR FIXED LOCATION (For Example: Rajkot-Gondal Highway Node 1)
-        const CAMERA_LOCATION = {
-            latitude: 22.1800,  // તમારો સેન્સર કેમેરા જ્યાં લગાડેલો હોય તેનો Latitude
-            longitude: 70.8100  // તમારો સેન્સર કેમેરા જ્યાં લગાડેલો હોય તેનો Longitude
-        };
-
-        const MAX_ALERT_RADIUS_METERS = 100; // 🎯 100 Meters Radius Limit
-
-        let userLocation = null;
-        let distanceFromCameraMeters = 99999; // Default Far distance
-
-        const video = document.getElementById('webcam');
-        const statusBox = document.getElementById('status-box');
-        const distanceInfo = document.getElementById('distance-info');
-        const emailStatus = document.getElementById('emailStatus');
-        const messageList = document.getElementById('message-list');
-        const photoCanvas = document.getElementById('photoCanvas');
-
-        let model = null;
-        let lastAlertState = -1;
-        let isCameraActive = true;
-        let lastEmailSentTime = 0;
-        let savedMessages = JSON.parse(localStorage.getItem('roadGuardian_email_logs')) || [];
-
-        // 📐 Haversine Formula to Calculate Distance in Meters
-        function calculateDistanceInMeters(lat1, lon1, lat2, lon2) {
-            const R = 6371e3; // Earth's radius in meters
-            const rad1 = lat1 * Math.PI / 180;
-            const rad2 = lat2 * Math.PI / 180;
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-
-            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                      Math.cos(rad1) * Math.cos(rad2) *
-                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-            return R * c; // Distance in meters
-        }
-
-        // 🛰️ Track User GPS Location
-        function trackUserLocation() {
             if ("geolocation" in navigator) {
-                navigator.geolocation.watchPosition(
-                    (position) => {
-                        userLocation = {
-                            latitude: position.coords.latitude,
-                            longitude: position.coords.longitude
-                        };
-                        distanceFromCameraMeters = calculateDistanceInMeters(
-                            CAMERA_LOCATION.latitude, CAMERA_LOCATION.longitude,
-                            userLocation.latitude, userLocation.longitude
-                        );
+                document.getElementById('status').innerText = "📍 જીપીએસ લોકેશન મેળવાઈ રહ્યું છે...";
+                
+                // ઓટોમેટિક યુઝર આઈડી બનાવવું
+                userId = 'user_' + Date.now();
 
-                        const formattedDist = Math.round(distanceFromCameraMeters);
-                        if (distanceFromCameraMeters <= MAX_ALERT_RADIUS_METERS) {
-                            distanceInfo.innerHTML = `📍 User Distance: <span style="color:#00E676;">${formattedDist}m (Inside 100m Alert Zone)</span>`;
-                        } else {
-                            distanceInfo.innerHTML = `📍 User Distance: <span style="color:#ff5252;">${formattedDist}m (Outside 100m Zone)</span>`;
-                        }
-                    },
-                    (error) => {
-                        distanceInfo.innerHTML = "⚠️ Location Permission Denied!";
-                    },
-                    { enableHighAccuracy: true }
-                );
+                navigator.geolocation.watchPosition(async (pos) => {
+                    const userData = {
+                        email: email,
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        lastSeen: Date.now()
+                    };
+
+                    // ફાયરબેઝમાં યુઝર ડેટા અપડેટ કરો
+                    await fetch(`${FIREBASE_DB}/${userId}.json`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(userData)
+                    });
+
+                    document.getElementById('status').innerText = "✅ તમે ૧૦૦m – ૫૦૦m ઈમરજન્સી એલર્ટ ઝોનમાં સુરક્ષિત છો!";
+                }, (err) => {
+                    document.getElementById('status').innerText = "❌ જીપીએસ પરમિશન આપવી જરૂરી છે!";
+                }, { enableHighAccuracy: true });
+
             } else {
-                distanceInfo.innerHTML = "❌ Geolocation Not Supported";
+                alert("તમારા મોબાઈલમાં Geolocation સપોર્ટ નથી.");
             }
         }
-
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.page-content').forEach(page => page.classList.remove('active'));
-
-            if (tabName === 'camera') {
-                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+    </script>
+</body>
+</html>
+t.add('active');
                 document.getElementById('camera-page').classList.add('active');
                 isCameraActive = true;
             } else {
