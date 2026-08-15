@@ -36,23 +36,21 @@
         .tab-container {
             display: flex;
             justify-content: center;
-            gap: 8px;
+            gap: 10px;
             margin-bottom: 15px;
-            flex-wrap: wrap;
         }
         .tab-btn {
             background-color: #222;
             color: #888;
             border: 2px solid #444;
-            padding: 8px 14px;
-            font-size: 13px;
+            padding: 10px 20px;
+            font-size: 14px;
             font-weight: bold;
             border-radius: 25px;
             cursor: pointer;
             transition: 0.3s;
             flex: 1;
-            min-width: 110px;
-            max-width: 160px;
+            max-width: 200px;
         }
         .tab-btn.active {
             background-color: #00E676;
@@ -95,48 +93,6 @@
             font-weight: bold;
         }
 
-        /* Form Inputs */
-        .form-container {
-            background-color: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 16px;
-            padding: 20px;
-            margin: 10px auto;
-            max-width: 480px;
-            text-align: left;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            font-size: 13px;
-            color: #aaa;
-            margin-bottom: 5px;
-        }
-        input[type="email"] {
-            width: 100%;
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid #444;
-            background: #222;
-            color: white;
-            font-size: 14px;
-        }
-        .action-btn {
-            background-color: #00E676;
-            color: #000;
-            font-weight: bold;
-            padding: 12px 20px;
-            border: none;
-            border-radius: 20px;
-            cursor: pointer;
-            width: 100%;
-            font-size: 14px;
-            transition: 0.2s;
-        }
-        .action-btn:active { transform: scale(0.97); }
-
         /* Test Email Button Styling */
         .test-btn {
             background-color: #2196F3;
@@ -151,7 +107,9 @@
             box-shadow: 0 4px 10px rgba(33, 150, 243, 0.3);
             transition: 0.2s;
         }
-        .test-btn:active { transform: scale(0.95); }
+        .test-btn:active {
+            transform: scale(0.95);
+        }
 
         /* Camera View */
         #webcam-container {
@@ -195,6 +153,7 @@
             font-size: 15px;
         }
 
+        /* Message List Container */
         #message-list {
             display: flex;
             flex-direction: column;
@@ -204,6 +163,7 @@
             padding-right: 5px;
         }
 
+        /* Individual Log Card */
         .sms-item {
             background-color: #263238;
             border-left: 4px solid #29b6f6;
@@ -273,7 +233,6 @@
     <!-- Navigation -->
     <div class="tab-container">
         <button class="tab-btn active" onclick="switchTab('camera')">📹 CAMERA</button>
-        <button class="tab-btn" onclick="switchTab('register')">📥 REGISTER GMAIL</button>
         <button class="tab-btn" onclick="switchTab('notifications')">📧 GMAIL LOGS</button>
     </div>
 
@@ -293,550 +252,7 @@
         </div>
     </div>
 
-    <!-- PAGE 2: USER GMAIL & LOCATION REGISTRATION -->
-    <div id="register-page" class="page-content">
-        <div class="form-container">
-            <h3 style="color:#00E676; margin-top:0;">📍 Location & Gmail Sync</h3>
-            <p style="font-size:12px; color:#ccc;">હાઈવે પર જવા માટે તમારો Gmail నమోదు કરો જેથી ૫૦૦m ઝોનમાં પ્રાણી આવતા જ તમને ઓટોમેટિક ઈમેઈલ મળી શકે.</p>
-            
-            <div class="form-group">
-                <label>Enter Your Gmail Address:</label>
-                <input type="email" id="userEmailInput" placeholder="example@gmail.com">
-            </div>
-
-            <button class="action-btn" onclick="registerUserGmailAndGPS()">📍 Save Gmail & Sync GPS</button>
-            <div id="regStatus" style="margin-top:10px; font-size:12px; color:#ffeb3b;"></div>
-        </div>
-    </div>
-
-    <!-- PAGE 3: SAVED EMAIL LOGS -->
-    <div id="notifications-page" class="page-content">
-        <div class="phone-container">
-            <div class="phone-header">
-                <span class="sender">✉️ Gmail Alert Logs</span>
-            </div>
-
-            <div id="message-list">
-                <div style="color: #666; text-align: center; padding: 20px;" id="empty-msg">No Gmail alerts sent yet.</div>
-            </div>
-
-            <button class="clear-btn" onclick="clearAllMessages()">🗑️ CLEAR ALL LOGS</button>
-        </div>
-    </div>
-
-    <canvas id="photoCanvas" style="display:none;"></canvas>
-    <div id="toast" class="toast">Action Completed!</div>
-
-    <!-- JavaScript Code Starts Here -->
-    <script>
-        const FIREBASE_ALERT_URL = "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian/alert.json";
-        const FIREBASE_USERS_URL = "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian/registered_users";
-
-        // EmailJS Credentials
-        const EMAILJS_SERVICE_ID = "service_9t8ppxg";
-        const EMAILJS_TEMPLATE_ID = "template_1efdzc9"; 
-        const EMAILJS_PUBLIC_KEY = "ZXgCOupaENPcCchAD";
-
-        (function(){
-            emailjs.init(EMAILJS_PUBLIC_KEY);
-        })();
-
-        // રાજકોટ-ગોંડલ હાઈવે કેમેરાનું ચોક્કસ લોકેશન
-        const CAMERA_LOCATION = { lat: 22.1800, lng: 70.8100 };
-        const MAX_RADIUS_METERS = 500; 
-
-        const video = document.getElementById('webcam');
-        const statusBox = document.getElementById('status-box');
-        const emailStatus = document.getElementById('emailStatus');
-        const messageList = document.getElementById('message-list');
-        const photoCanvas = document.getElementById('photoCanvas');
-
-        let model = null;
-        let lastAlertState = -1;
-        let isCameraActive = true;
-        let lastEmailSentTime = 0;
-        let savedMessages = JSON.parse(localStorage.getItem('roadGuardian_email_logs')) || [];
-
-        // 📐 Haversine Formula (મીટરમાં અંતર ગણવા)
-        function getDistanceMeters(lat1, lon1, lat2, lon2) {
-            const R = 6371e3;
-            const r1 = lat1 * Math.PI / 180;
-            const r2 = lat2 * Math.PI / 180;
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(r1) * Math.cos(r2) * Math.sin(dLon/2) * Math.sin(dLon/2);
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        }
-
-        // 1. Tab Switcher
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.page-content').forEach(page => page.classList.remove('active'));
-
-            if (tabName === 'camera') {
-                document.querySelectorAll('.tab-btn')[0].classList.add('active');
-                document.getElementById('camera-page').classList.add('active');
-                isCameraActive = true;
-            } else if (tabName === 'register') {
-                document.querySelectorAll('.tab-btn')[1].classList.add('active');
-                document.getElementById('register-page').classList.add('active');
-                isCameraActive = false;
-            } else {
-                document.querySelectorAll('.tab-btn')[2].classList.add('active');
-                document.getElementById('notifications-page').classList.add('active');
-                isCameraActive = false;
-                renderSavedMessages();
-            }
-        }
-
-        // 2. Register User Gmail & Sync Location
-        function registerUserGmailAndGPS() {
-            const email = document.getElementById('userEmailInput').value.trim();
-            const regStatus = document.getElementById('regStatus');
-
-            if (!email || !email.includes('@')) {
-                alert("મહેરબાની કરીને સાચો Gmail એન્ટર કરો!");
-                return;
-            }
-
-            if ("geolocation" in navigator) {
-                regStatus.innerText = "⏳ Getting GPS Location...";
-                navigator.geolocation.getCurrentPosition(async (pos) => {
-                    const userId = 'user_' + email.replace(/[^a-zA-Z0-9]/g, '_');
-                    const userData = {
-                        gmail: email,
-                        lat: pos.coords.latitude,
-                        lng: pos.coords.longitude,
-                        timestamp: Date.now()
-                    };
-
-                    try {
-                        await fetch(`${FIREBASE_USERS_URL}/${userId}.json`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(userData)
-                        });
-                        regStatus.innerText = "🟢 Gmail and GPS Location Registered Successfully!";
-                        showToast("Gmail Registered!");
-                        localStorage.setItem('my_registered_gmail', email);
-                    } catch (e) {
-                        regStatus.innerText = "❌ Firebase Connection Failed.";
-                    }
-                }, (err) => {
-                    regStatus.innerText = "❌ Please ALLOW Location Access in Browser.";
-                });
-            } else {
-                regStatus.innerText = "❌ Geolocation is not supported by your browser.";
-            }
-        }
-
-        // 3. Setup Webcam
-        async function setupWebcam() {
-            return new Promise((resolve, reject) => {
-                navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" },
-                    audio: false
-                }).then((stream) => {
-                    video.srcObject = stream;
-                    video.onloadedmetadata = () => resolve();
-                }).catch((err) => reject(err));
-            });
-        }
-
-        // 4. Update Firebase
-        async function updateFirebase(alertState) {
-            if (alertState === lastAlertState) return;
-            lastAlertState = alertState;
-
-            try {
-                await fetch(FIREBASE_ALERT_URL, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(alertState)
-                });
-            } catch (error) {
-                console.error("Firebase Update Failed:", error);
-            }
-        }
-
-        // 5. Send Gmail Alert to 500m Nearby Registered Users
-        async function sendAnimalGmailAlert(detectedAnimal) {
-            photoCanvas.width = 320;
-            photoCanvas.height = 240;
-            const ctx = photoCanvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
-            
-            const imageBase64 = photoCanvas.toDataURL('image/jpeg', 0.5);
-            const time = new Date().toLocaleString();
-
-            emailStatus.innerText = "⏳ Checking 500m Zone for registered Gmails...";
-
-            try {
-                const res = await fetch(`${FIREBASE_USERS_URL}.json`);
-                const users = await res.json();
-
-                let recipientList = [];
-
-                if (users) {
-                    Object.keys(users).forEach(id => {
-                        const user = users[id];
-                        const dist = getDistanceMeters(CAMERA_LOCATION.lat, CAMERA_LOCATION.lng, user.lat, user.lng);
-                        if (dist <= MAX_RADIUS_METERS) {
-                            recipientList.push(user.gmail);
-                        }
-                    });
-                }
-
-                const localUser = localStorage.getItem('my_registered_gmail');
-                if (recipientList.length === 0 && localUser) {
-                    recipientList.push(localUser);
-                }
-
-                if (recipientList.length === 0) {
-                    emailStatus.innerText = "⚠️ No registered Gmail users in 500m zone.";
-                    return;
-                }
-
-                emailStatus.innerText = `⏳ Sending Gmail to ${recipientList.length} nearby users...`;
-
-                recipientList.forEach(email => {
-                    const alertMsg = `🚨 ALERT: ${detectedAnimal} detected on Rajkot-Gondal Highway at ${time}. Drive slow!`;
-                    
-                    const templateParams = {
-                        to_name: email,
-                        to_email: email,
-                        alert_time: time,
-                        image_data: imageBase64,
-                        message: alertMsg
-                    };
-
-                    emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
-                        .then(function() {
-                            emailStatus.innerText = `✅ Gmail sent to ${email}`;
-                            addMessageToStorage(`✉️ Gmail sent to (${email}): ${alertMsg}`, true);
-                            showToast("Gmail Sent!");
-                        }, function(error) {
-                            emailStatus.innerText = "❌ Email failed to send.";
-                            addMessageToStorage(`❌ Gmail failed: ${error.text || 'Error'}`, true);
-                        });
-                });
-
-            } catch (err) {
-                console.error("Gmail Broadcast Error:", err);
-            }
-        }
-
-        // 6. Manual Direct Test Trigger
-        function testEmailDirectly() {
-            sendAnimalGmailAlert("MANUAL TEST ANIMAL");
-        }
-
-        // 7. Local Storage Logging
-        function addMessageToStorage(msgText, isAlert) {
-            const time = new Date().toLocaleTimeString();
-            const date = new Date().toLocaleDateString();
-
-            const newMsgObj = {
-                id: Date.now(),
-                text: msgText,
-                time: `${date} ${time}`,
-                isAlert: isAlert
-            };
-
-            savedMessages.unshift(newMsgObj);
-            localStorage.setItem('roadGuardian_email_logs', JSON.stringify(savedMessages));
-        }
-
-        // 8. Render Saved Email Logs
-        function renderSavedMessages() {
-            if (savedMessages.length === 0) {
-                messageList.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">No Gmail alerts sent yet.</div>';
-                return;
-            }
-
-            let html = '';
-            savedMessages.forEach(msg => {
-                const alertClass = msg.isAlert ? 'alert-mode' : '';
-                html += `
-                    <div class="sms-item ${alertClass}">
-                        <div class="sms-time">🕒 ${msg.time}</div>            display: flex;
-            justify-content: center;
-            gap: 8px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-        .tab-btn {
-            background-color: #222;
-            color: #888;
-            border: 2px solid #444;
-            padding: 8px 14px;
-            font-size: 13px;
-            font-weight: bold;
-            border-radius: 25px;
-            cursor: pointer;
-            transition: 0.3s;
-            flex: 1;
-            min-width: 110px;
-            max-width: 160px;
-        }
-        .tab-btn.active {
-            background-color: #00E676;
-            color: #000;
-            border-color: #00E676;
-        }
-
-        /* Page Content */
-        .page-content { display: none; }
-        .page-content.active { display: block; }
-
-        /* Status Header */
-        #status-box {
-            padding: 12px 20px;
-            font-size: 18px;
-            font-weight: bold;
-            border-radius: 8px;
-            display: inline-block;
-            width: 100%;
-            max-width: 480px;
-            background-color: #2e7d32;
-            color: white;
-            transition: 0.3s;
-            margin-bottom: 10px;
-        }
-        .danger {
-            background-color: #c62828 !important;
-            animation: pulse 1s infinite;
-        }
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.7; }
-            100% { opacity: 1; }
-        }
-
-        #emailStatus {
-            font-size: 13px;
-            color: #ffeb3b;
-            margin-bottom: 10px;
-            font-weight: bold;
-        }
-
-        /* Form Inputs */
-        .form-container {
-            background-color: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 16px;
-            padding: 20px;
-            margin: 10px auto;
-            max-width: 480px;
-            text-align: left;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            font-size: 13px;
-            color: #aaa;
-            margin-bottom: 5px;
-        }
-        input[type="email"] {
-            width: 100%;
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid #444;
-            background: #222;
-            color: white;
-            font-size: 14px;
-        }
-        .action-btn {
-            background-color: #00E676;
-            color: #000;
-            font-weight: bold;
-            padding: 12px 20px;
-            border: none;
-            border-radius: 20px;
-            cursor: pointer;
-            width: 100%;
-            font-size: 14px;
-            transition: 0.2s;
-        }
-        .action-btn:active { transform: scale(0.97); }
-
-        /* Test Email Button Styling */
-        .test-btn {
-            background-color: #2196F3;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 20px;
-            cursor: pointer;
-            margin-bottom: 15px;
-            font-weight: bold;
-            font-size: 14px;
-            box-shadow: 0 4px 10px rgba(33, 150, 243, 0.3);
-            transition: 0.2s;
-        }
-        .test-btn:active { transform: scale(0.95); }
-
-        /* Camera View */
-        #webcam-container {
-            position: relative;
-            display: inline-block;
-            border: 3px solid #333;
-            border-radius: 12px;
-            overflow: hidden;
-            background-color: #000;
-            width: 100%;
-            max-width: 480px;
-        }
-        video {
-            display: block;
-            width: 100%;
-            height: auto;
-        }
-
-        /* Email Log Styling */
-        .phone-container {
-            background-color: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 16px;
-            padding: 15px;
-            margin: 10px auto;
-            max-width: 480px;
-            text-align: left;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
-        .phone-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid #333;
-            padding-bottom: 10px;
-            margin-bottom: 15px;
-        }
-        .phone-header .sender {
-            font-weight: bold;
-            color: #00E676;
-            font-size: 15px;
-        }
-
-        #message-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            max-height: 400px;
-            overflow-y: auto;
-            padding-right: 5px;
-        }
-
-        .sms-item {
-            background-color: #263238;
-            border-left: 4px solid #29b6f6;
-            border-radius: 8px;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .sms-item.alert-mode {
-            background-color: #3e1212;
-            border-left: 4px solid #ff5252;
-        }
-        .sms-time {
-            font-size: 11px;
-            color: #aaa;
-            align-self: flex-end;
-        }
-        .sms-text {
-            font-size: 14px;
-            color: #fff;
-            line-height: 1.4;
-            word-break: break-word;
-        }
-
-        .clear-btn {
-            background-color: #333;
-            color: #ff5252;
-            border: 1px solid #ff5252;
-            padding: 8px;
-            font-size: 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 15px;
-            font-weight: bold;
-        }
-
-        .toast {
-            visibility: hidden;
-            min-width: 200px;
-            background-color: #00E676;
-            color: #000;
-            text-align: center;
-            border-radius: 20px;
-            padding: 10px;
-            position: fixed;
-            z-index: 100;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-weight: bold;
-        }
-        .toast.show {
-            visibility: visible;
-            animation: fadein 0.5s, fadeout 0.5s 2.5s;
-        }
-        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
-        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
-    </style>
-</head>
-<body>
-
-    <h1>RoadGuardian AI</h1>
-    <p class="subtitle">Rajkot-Gondal Highway Safety System</p>
-
-    <!-- Navigation -->
-    <div class="tab-container">
-        <button class="tab-btn active" onclick="switchTab('camera')">📹 CAMERA</button>
-        <button class="tab-btn" onclick="switchTab('register')">📥 REGISTER GMAIL</button>
-        <button class="tab-btn" onclick="switchTab('notifications')">📧 GMAIL LOGS</button>
-    </div>
-
-    <!-- Live Status Header -->
-    <div id="status-box">SAFE: ROAD CLEAR</div>
-    <div id="emailStatus">📧 Email Alert Ready</div>
-
-    <!-- Manual Test Button -->
-    <div>
-        <button class="test-btn" onclick="testEmailDirectly()">🧪 SEND TEST EMAIL</button>
-    </div>
-
-    <!-- PAGE 1: CAMERA -->
-    <div id="camera-page" class="page-content active">
-        <div id="webcam-container">
-            <video id="webcam" autoplay playsinline muted></video>
-        </div>
-    </div>
-
-    <!-- PAGE 2: USER GMAIL & LOCATION REGISTRATION -->
-    <div id="register-page" class="page-content">
-        <div class="form-container">
-            <h3 style="color:#00E676; margin-top:0;">📍 Location & Gmail Sync</h3>
-            <p style="font-size:12px; color:#ccc;">હાઈવે પર જવા માટે તમારો Gmail నమోదు કરો જેથી ૫૦૦m ઝોનમાં પ્રાણી આવતા જ તમને ઓટોમેટિક ઈમેઈલ મળી શકે.</p>
-            
-            <div class="form-group">
-                <label>Enter Your Gmail Address:</label>
-                <input type="email" id="userEmailInput" placeholder="example@gmail.com">
-            </div>
-
-            <button class="action-btn" onclick="registerUserGmailAndGPS()">📍 Save Gmail & Sync GPS</button>
-            <div id="regStatus" style="margin-top:10px; font-size:12px; color:#ffeb3b;"></div>
-        </div>
-    </div>
-
-    <!-- PAGE 3: SAVED EMAIL LOGS -->
+    <!-- PAGE 2: SAVED EMAIL LOGS -->
     <div id="notifications-page" class="page-content">
         <div class="phone-container">
             <div class="phone-header">
@@ -855,8 +271,7 @@
     <div id="toast" class="toast">Action Completed!</div>
 
     <script>
-        const FIREBASE_ALERT_URL = "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian/alert.json";
-        const FIREBASE_USERS_URL = "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian/registered_users";
+        const FIREBASE_URL = "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian/alert.json";
 
         // EmailJS Credentials
         const EMAILJS_SERVICE_ID = "service_9t8ppxg";
@@ -866,10 +281,6 @@
         (function(){
             emailjs.init(EMAILJS_PUBLIC_KEY);
         })();
-
-        // કેમેરાનું ચોક્કસ લોકેશન (રાજકોટ-ગોંડલ હાઈવે)
-        const CAMERA_LOCATION = { lat: 22.1800, lng: 70.8100 };
-        const MAX_RADIUS_METERS = 500; // 🎯 ૫૦૦ મીટરનો રેડિયસ
 
         const video = document.getElementById('webcam');
         const statusBox = document.getElementById('status-box');
@@ -883,19 +294,6 @@
         let lastEmailSentTime = 0;
         let savedMessages = JSON.parse(localStorage.getItem('roadGuardian_email_logs')) || [];
 
-        // 📐 Haversine Formula (મીટરમાં અંતર ગણવા)
-        function getDistanceMeters(lat1, lon1, lat2, lon2) {
-            const R = 6371e3;
-            const r1 = lat1 * Math.PI / 180;
-            const r2 = lat2 * Math.PI / 180;
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(r1) * Math.cos(r2) * Math.sin(dLon/2) * Math.sin(dLon/2);
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        }
-
         // 1. Tab Switcher
         function switchTab(tabName) {
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -905,60 +303,15 @@
                 document.querySelectorAll('.tab-btn')[0].classList.add('active');
                 document.getElementById('camera-page').classList.add('active');
                 isCameraActive = true;
-            } else if (tabName === 'register') {
-                document.querySelectorAll('.tab-btn')[1].classList.add('active');
-                document.getElementById('register-page').classList.add('active');
-                isCameraActive = false;
             } else {
-                document.querySelectorAll('.tab-btn')[2].classList.add('active');
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
                 document.getElementById('notifications-page').classList.add('active');
                 isCameraActive = false;
                 renderSavedMessages();
             }
         }
 
-        // 2. Register User Gmail & Sync Location
-        function registerUserGmailAndGPS() {
-            const email = document.getElementById('userEmailInput').value.trim();
-            const regStatus = document.getElementById('regStatus');
-
-            if (!email || !email.includes('@')) {
-                alert("મહેરબાની કરીને સાચો Gmail એન્ટર કરો!");
-                return;
-            }
-
-            if ("geolocation" in navigator) {
-                regStatus.innerText = "⏳ Getting GPS Location...";
-                navigator.geolocation.getCurrentPosition(async (pos) => {
-                    const userId = 'user_' + email.replace(/[^a-zA-Z0-9]/g, '_');
-                    const userData = {
-                        gmail: email,
-                        lat: pos.coords.latitude,
-                        lng: pos.coords.longitude,
-                        timestamp: Date.now()
-                    };
-
-                    try {
-                        await fetch(`${FIREBASE_USERS_URL}/${userId}.json`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(userData)
-                        });
-                        regStatus.innerText = "🟢 Gmail and GPS Location Registered Successfully!";
-                        showToast("Gmail Registered!");
-                        localStorage.setItem('my_registered_gmail', email);
-                    } catch (e) {
-                        regStatus.innerText = "❌ Firebase Connection Failed.";
-                    }
-                }, (err) => {
-                    regStatus.innerText = "❌ Please ALLOW Location Access in Browser.";
-                });
-            } else {
-                regStatus.innerText = "❌ Geolocation is not supported by your browser.";
-            }
-        }
-
-        // 3. Setup Webcam
+        // 2. Setup Webcam
         async function setupWebcam() {
             return new Promise((resolve, reject) => {
                 navigator.mediaDevices.getUserMedia({
@@ -971,180 +324,7 @@
             });
         }
 
-        // 4. Update Firebase
-        async function updateFirebase(alertState) {
-            if (alertState === lastAlertState) return;
-            lastAlertState = alertState;
-
-            try {
-                await fetch(FIREBASE_ALERT_URL, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(alertState)
-                });
-            } catch (error) {
-                console.error("Firebase Update Failed:", error);
-            }
-        }
-
-        // 5. Send Gmail Alert to 500m Nearby Registered Users
-        async function sendAnimalGmailAlert(detectedAnimal) {
-            photoCanvas.width = 320;
-            photoCanvas.height = 240;
-            const ctx = photoCanvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
-            
-            const imageBase64 = photoCanvas.toDataURL('image/jpeg', 0.5);
-            const time = new Date().toLocaleString();
-
-            emailStatus.innerText = "⏳ Checking 500m Zone for registered Gmails...";
-
-            try {
-                const res = await fetch(`${FIREBASE_USERS_URL}.json`);
-                const users = await res.json();
-
-                let recipientList = [];
-
-                if (users) {
-                    Object.keys(users).forEach(id => {
-                        const user = users[id];
-                        const dist = getDistanceMeters(CAMERA_LOCATION.lat, CAMERA_LOCATION.lng, user.lat, user.lng);
-                        if (dist <= MAX_RADIUS_METERS) {
-                            recipientList.push(user.gmail);
-                        }
-                    });
-                }
-
-                // Fallback to local user email if registered
-                const localUser = localStorage.getItem('my_registered_gmail');
-                if (recipientList.length === 0 && localUser) {
-                    recipientList.push(localUser);
-                }
-
-                if (recipientList.length === 0) {
-                    emailStatus.innerText = "⚠️ No registered Gmail users in 500m zone.";
-                    return;
-                }
-
-                emailStatus.innerText = `⏳ Sending Gmail to ${recipientList.length} nearby users...`;
-
-                // Send email to all target users in 500m
-                recipientList.forEach(email => {
-                    const alertMsg = `🚨 ALERT: ${detectedAnimal} detected on Rajkot-Gondal Highway at ${time}. Drive slow!`;
-                    
-                    const templateParams = {
-                        to_name: email,
-                        to_email: email,
-                        alert_time: time,
-                        image_data: imageBase64,
-                        message: alertMsg
-                    };
-
-                    emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
-                        .then(function() {
-                            emailStatus.innerText = `✅ Gmail sent to ${email}`;
-                            addMessageToStorage(`✉️ Gmail sent to (${email}): ${alertMsg}`, true);
-                            showToast("Gmail Sent!");
-                        }, function(error) {
-                            emailStatus.innerText = "❌ Email failed to send.";
-                            addMessageToStorage(`❌ Gmail failed: ${error.text || 'Error'}`, true);
-                        });
-                });
-
-            } catch (err) {
-                console.error("Gmail Broadcast Error:", err);
-            }
-        }
-
-        // 6. Manual Direct Test Trigger
-        function testEmailDirectly() {
-            sendAnimalGmailAlert("MANUAL TEST ANIMAL");
-        }
-
-        // 7. Local Storage Logging
-        function addMessageToStorage(msgText, isAlert) {
-            const time = new Date().toLocaleTimeString();
-            const date = new Date().toLocaleDateString();
-
-            const newMsgObj = {
-                id: Date.now(),
-                text: msgText,
-                time: `${date} ${time}`,
-                isAlert: isAlert
-            };
-
-            savedMessages.unshift(newMsgObj);
-            localStorage.setItem('roadGuardian_email_logs', JSON.stringify(savedMessages));
-        }
-
-        // 8. Render Saved Email Logs
-        function renderSavedMessages() {
-            if (savedMessages.length === 0) {
-                messageList.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">No Gmail alerts sent yet.</div>';
-                return;
-            }
-
-            let html = '';
-            savedMessages.forEach(msg => {
-                const alertClass = msg.isAlert ? 'alert-mode' : '';
-                html += `
-                   
-            if ("geolocation" in navigator) {
-                document.getElementById('status').innerText = "📍 જીપીએસ લોકેશન મેળવાઈ રહ્યું છે...";
-                
-                // ઓટોમેટિક યુઝર આઈડી બનાવવું
-                userId = 'user_' + Date.now();
-
-                navigator.geolocation.watchPosition(async (pos) => {
-                    const userData = {
-                        email: email,
-                        lat: pos.coords.latitude,
-                        lng: pos.coords.longitude,
-                        lastSeen: Date.now()
-                    };
-
-                    // ફાયરબેઝમાં યુઝર ડેટા અપડેટ કરો
-                    await fetch(`${FIREBASE_DB}/${userId}.json`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(userData)
-                    });
-
-                    document.getElementById('status').innerText = "✅ તમે ૧૦૦m – ૫૦૦m ઈમરજન્સી એલર્ટ ઝોનમાં સુરક્ષિત છો!";
-                }, (err) => {
-                    document.getElementById('status').innerText = "❌ જીપીએસ પરમિશન આપવી જરૂરી છે!";
-                }, { enableHighAccuracy: true });
-
-            } else {
-                alert("તમારા મોબાઈલમાં Geolocation સપોર્ટ નથી.");
-            }
-        }
-    <
-</body>
-</html>
-t.add('active');
-                document.getElementById('camera-page').classList.add('active');
-                isCameraActive = true;
-            } else {
-                document.querySelectorAll('.tab-btn')[1].classList.add('active');
-                document.getElementById('notifications-page').classList.add('active');
-                isCameraActive = false;
-                renderSavedMessages();
-            }
-        }
-
-        async function setupWebcam() {
-            return new Promise((resolve, reject) => {
-                navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" },
-                    audio: false
-                }).then((stream) => {
-                    video.srcObject = stream;
-                    video.onloadedmetadata = () => resolve();
-                }).catch((err) => reject(err));
-            });
-        }
-
+        // 3. Update Firebase
         async function updateFirebase(alertState) {
             if (alertState === lastAlertState) return;
             lastAlertState = alertState;
@@ -1160,22 +340,24 @@ t.add('active');
             }
         }
 
-        // 📧 Send Gmail Alert Function (Only Triggered within 100m)
+        // 4. Send Gmail Alert with Compressed Photo Attachment (< 50KB)
         function sendAnimalGmailAlert(detectedAnimal) {
+            // Compress frame to 320x240 for EmailJS 50KB limit
             photoCanvas.width = 320;
             photoCanvas.height = 240;
             const ctx = photoCanvas.getContext('2d');
             ctx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
             
+            // Compress image quality to 50%
             const imageBase64 = photoCanvas.toDataURL('image/jpeg', 0.5);
             const time = new Date().toLocaleString();
 
-            emailStatus.innerText = "⏳ Sending Proximity Alert Email...";
+            emailStatus.innerText = "⏳ Sending Gmail alert with photo...";
 
-            const alertMsg = `🚨 EMERGENCY WARNING: ${detectedAnimal} detected within 100m of your vehicle on Rajkot-Gondal Highway at ${time}. Drive with extreme caution!`;
+            const alertMsg = `🚨 ALERT: ${detectedAnimal} detected on Rajkot-Gondal Highway at ${time}. Drive with caution!`;
 
             const templateParams = {
-                to_name: "Nearby Driver / Patrol Officer",
+                to_name: "Highway Patrol Officer",
                 alert_time: time,
                 image_data: imageBase64,
                 message: alertMsg
@@ -1183,9 +365,9 @@ t.add('active');
 
             emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
                 .then(function() {
-                    emailStatus.innerText = "✅ Proximity Alert Email Sent!";
-                    addMessageToStorage(`✉️ Gmail sent (Within 100m): ${alertMsg}`, true);
-                    showToast("Email Sent to Nearby Users!");
+                    emailStatus.innerText = "✅ Gmail alert sent successfully!";
+                    addMessageToStorage(`✉️ Gmail sent: ${alertMsg}`, true);
+                    showToast("Email Sent!");
                 }, function(error) {
                     emailStatus.innerText = "❌ Email failed to send.";
                     addMessageToStorage(`❌ Gmail failed: ${error.text || 'Error'}`, true);
@@ -1193,10 +375,12 @@ t.add('active');
                 });
         }
 
+        // 5. Manual Direct Test Trigger
         function testEmailDirectly() {
             sendAnimalGmailAlert("MANUAL TEST ANIMAL");
         }
 
+        // 6. Local Storage Logging
         function addMessageToStorage(msgText, isAlert) {
             const time = new Date().toLocaleTimeString();
             const date = new Date().toLocaleDateString();
@@ -1212,6 +396,7 @@ t.add('active');
             localStorage.setItem('roadGuardian_email_logs', JSON.stringify(savedMessages));
         }
 
+        // 7. Render Saved Email Logs
         function renderSavedMessages() {
             if (savedMessages.length === 0) {
                 messageList.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">No Gmail alerts sent yet.</div>';
@@ -1232,6 +417,7 @@ t.add('active');
             messageList.innerHTML = html;
         }
 
+        // 8. AI Detection Frame Loop
         const targetAnimals = ['cat', 'dog', 'cow', 'horse', 'sheep', 'elephant', 'bear', 'zebra', 'giraffe'];
 
         async function detectFrame() {
@@ -1253,14 +439,10 @@ t.add('active');
 
                     updateFirebase(1);
 
-                    // 🚨 IMPORTANT: Send Email ONLY if user is WITHIN 100 Meters Radius!
-                    if (distanceFromCameraMeters <= MAX_ALERT_RADIUS_METERS) {
-                        if (Date.now() - lastEmailSentTime > 15000) {
-                            sendAnimalGmailAlert(detectedName);
-                            lastEmailSentTime = Date.now();
-                        }
-                    } else {
-                        emailStatus.innerText = "ℹ️ Animal detected, but driver is >100m away (Email Skipped).";
+                    // Send max 1 email every 15 seconds
+                    if (Date.now() - lastEmailSentTime > 15000) {
+                        sendAnimalGmailAlert(detectedName);
+                        lastEmailSentTime = Date.now();
                     }
                 } else {
                     statusBox.innerText = "SAFE: ROAD CLEAR";
@@ -1287,8 +469,8 @@ t.add('active');
             setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
         }
 
+        // 9. Initialize
         async function init() {
-            trackUserLocation();
             statusBox.innerText = "Loading AI Model...";
             try {
                 await setupWebcam();
