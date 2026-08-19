@@ -1,228 +1,259 @@
 <!DOCTYPE html>
-<html lang="gu">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Forest & Highway Telegram Guard System</title>
+    <title>RoadGuardian & Forest AI Surveillance</title>
+    <!-- EmailJS SDK -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background-color: #121212; color: #fff; font-family: 'Segoe UI', Arial, sans-serif; text-align: center; padding: 15px; }
-        h1 { color: #00E676; margin-bottom: 15px; }
-        
-        .role-container { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
-        .role-btn { background: #222; color: #aaa; border: 2px solid #444; padding: 10px 20px; font-weight: bold; border-radius: 20px; cursor: pointer; flex: 1; max-width: 200px; }
-        .role-btn.active { background: #00E676; color: #000; border-color: #00E676; }
+        body { 
+            background-color: #0d1117; 
+            color: #f0f6fc; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            min-height: 100vh; 
+            padding: 15px; 
+        }
 
-        .panel { display: none; background: #1e1e1e; border-radius: 12px; padding: 20px; max-width: 480px; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); text-align: left; }
-        .panel.active { display: block; }
+        .container { 
+            width: 100%; 
+            max-width: 500px; 
+            background: #161b22; 
+            border: 1px solid #30363d; 
+            border-radius: 12px; 
+            padding: 16px; 
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5); 
+        }
 
-        label { display: block; margin-top: 10px; font-size: 14px; color: #aaa; }
-        input, select, button.action-btn { width: 100%; padding: 10px; margin-top: 5px; border-radius: 6px; border: 1px solid #333; background: #2a2a2a; color: #fff; font-size: 15px; }
-        button.action-btn { background: #00E676; color: #000; font-weight: bold; cursor: pointer; margin-top: 15px; border: none; }
-        button.action-btn:hover { background: #00c865; }
+        h2 { 
+            text-align: center; 
+            color: #2f81f7; 
+            margin-bottom: 12px; 
+            font-size: 1.2rem; 
+        }
 
-        .status-box { padding: 12px; font-size: 16px; font-weight: bold; border-radius: 6px; text-align: center; margin-bottom: 15px; background: #2e7d32; }
-        .danger { background: #c62828 !important; animation: pulse 1s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+        /* Live Status Badge */
+        .status-card { 
+            padding: 12px; 
+            border-radius: 8px; 
+            text-align: center; 
+            font-weight: bold; 
+            font-size: 0.95rem; 
+            margin-bottom: 12px; 
+            background: #238636; 
+            color: #ffffff; 
+            transition: background 0.3s ease; 
+        }
+        .status-card.alert { 
+            background: #da3633; 
+            animation: blink 1s infinite; 
+        }
 
-        #webcam-container { position: relative; border: 2px solid #333; border-radius: 8px; overflow: hidden; background: #000; margin-top: 10px; }
-        video { width: 100%; display: block; }
-        .log-box { background: #181818; border: 1px solid #333; border-radius: 6px; padding: 10px; margin-top: 10px; max-height: 150px; overflow-y: auto; font-size: 12px; }
+        @keyframes blink { 
+            0% { opacity: 1; } 
+            50% { opacity: 0.5; } 
+            100% { opacity: 1; } 
+        }
+
+        /* Camera Feed Container */
+        .camera-wrapper { 
+            position: relative; 
+            width: 100%; 
+            background: #000; 
+            border-radius: 8px; 
+            overflow: hidden; 
+            border: 1px solid #30363d; 
+            aspect-ratio: 4/3; 
+        }
+        video { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover; 
+            display: block; 
+        }
+
+        /* Simple Log Terminal */
+        .log-container { 
+            margin-top: 12px; 
+            background: #0d1117; 
+            border: 1px solid #30363d; 
+            border-radius: 6px; 
+            padding: 10px; 
+            height: 120px; 
+            overflow-y: auto; 
+            font-family: monospace; 
+            font-size: 0.8rem; 
+            color: #8b949e; 
+        }
+        .log-entry { margin-bottom: 4px; }
+        .log-entry.success { color: #3fb950; }
+        .log-entry.warn { color: #f85149; }
+
+        canvas { display: none; }
     </style>
 </head>
 <body>
 
-    <h1>🛡️ RoadGuardian & Forest AI</h1>
+    <div class="container">
+        <h2>🛡️ Live Surveillance Terminal</h2>
 
-    <!-- Role Switcher -->
-    <div class="role-container">
-        <button class="role-btn active" onclick="switchRole('admin')">👨‍💼 Admin</button>
-        <button class="role-btn" onclick="switchRole('visitor')">👤 Visitor</button>
-    </div>
+        <!-- Status Box -->
+        <div id="status-card" class="status-card">SYSTEM ACTIVE - MONITORING</div>
 
-    <!-- ADMIN PANEL -->
-    <div id="admin-panel" class="panel active">
-        <h3>👨‍💼 Admin Management</h3>
-        <hr style="border-color:#333; margin:10px 0;">
-        
-        <label>૧. વિઝિટરનો મોબાઈલ નંબર:</label>
-        <input type="tel" id="admin-phone" placeholder="+91 9876543210">
-
-        <label>૨. કોડની સમય મર્યાદા (Validity):</label>
-        <select id="admin-validity">
-            <option value="10">10 Minutes</option>
-            <option value="60">1 Hour</option>
-            <option value="300">5 Hours</option>
-            <option value="600">10 Hours</option>
-            <option value="1440">24 Hours</option>
-            <option value="always">Always (Permanent)</option>
-        </select>
-
-        <button class="action-btn" onclick="generateVisitorCode()">🔑 Generat Code for Visitor</button>
-
-        <div id="generated-code-box" class="log-box" style="display:none; color:#00E676; margin-top:15px; font-size:14px;"></div>
-
-        <h4 style="margin-top:20px;">🖥️ Live Monitoring & Camera</h4>
-        <div id="status-box" class="status-box">SYSTEM ACTIVE - SAFE</div>
-        <div id="webcam-container">
+        <!-- Camera Frame Only -->
+        <div class="camera-wrapper">
             <video id="webcam" autoplay playsinline muted></video>
+        </div>
+
+        <!-- Minimal Log Output -->
+        <div id="log-terminal" class="log-container">
+            <div class="log-entry">[SYSTEM] Initializing camera & sensors...</div>
         </div>
     </div>
 
-    <!-- VISITOR PANEL -->
-    <div id="visitor-panel" class="panel">
-        <h3>👤 Visitor Portal</h3>
-        <hr style="border-color:#333; margin:10px 0;">
-
-        <label>૧. Admin દ્વારા અપાયેલ ૬ અંકનો પાસકોડ નાખો:</label>
-        <input type="text" id="visitor-code" placeholder="123456">
-
-        <button class="action-btn" onclick="registerVisitor()">✅ Verify & Register Location</button>
-
-        <div id="visitor-status" class="log-box" style="margin-top:15px;">કૃપા કરીને કોડ નાખી રજિસ્ટર કરો.</div>
-    </div>
-
-    <canvas id="photoCanvas" style="display:none;"></canvas>
+    <!-- Hidden Canvas for Frame Capture -->
+    <canvas id="captureCanvas"></canvas>
 
     <script>
-        // --- ⚙️ Telegram Configuration ---
-        const BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"; // તમારો BotFather ટોકન
-        const ADMIN_CHAT_ID = "YOUR_ADMIN_CHAT_ID";   # તમારો Telegram User ID
+        // --- ⚙️ Credentials & API Configuration ---
+        const TELEGRAM_BOT_TOKEN = "8606654492:AAEJA73s0KDpqxPjthTNawpQlz7DYkddd1U";
+        const TELEGRAM_CHAT_ID = "8517706642";
 
-        let visitorDatabase = JSON.parse(localStorage.getItem('visitor_db')) || [];
-        let currentVisitor = null;
-        let lastAlertTime = 0;
+        const EMAILJS_SERVICE_ID = "service_9t8ppxg";
+        const EMAILJS_PUBLIC_KEY = "ZXgCOupaENPcCchAD";
+        
+        // Department Template IDs
+        const EMAILJS_TEMPLATE_HIGHWAY = "template_1efdzc9"; // Highway Dept
+        const EMAILJS_TEMPLATE_FOREST = "template_cvp7e1i";  // Forest Dept
 
-        // Switch Roles
-        function switchRole(role) {
-            document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        let currentLat = "22.3039"; // Default Rajkot Coordinates
+        let currentLon = "70.8022";
 
-            if(role === 'admin') {
-                document.querySelectorAll('.role-btn')[0].classList.add('active');
-                document.getElementById('admin-panel').classList.add('active');
-            } else {
-                document.querySelectorAll('.role-btn')[1].classList.add('active');
-                document.getElementById('visitor-panel').classList.add('active');
-            }
-        }
+        // Initialize EmailJS
+        emailjs.init(EMAILJS_PUBLIC_KEY);
 
-        // Setup Rear Camera
-        async function setupCamera() {
+        // --- 1. Camera & GPS Initialization ---
+        async function initSystem() {
+            logMsg("Requesting camera access...", "info");
             try {
-                const video = document.getElementById('webcam');
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-                video.srcObject = stream;
-            } catch(e) {
-                console.error("Camera access failed", e);
-            }
-        }
-
-        // 1. Admin: Make Visitor Code
-        function generateVisitorCode() {
-            const phone = document.getElementById('admin-phone').value;
-            const validity = document.getElementById('admin-validity').value;
-
-            if(!phone) { alert("કૃપા કરીને ફોન નંબર લખો!"); return; }
-
-            const code = Math.floor(100000 + Math.random() * 900000).toString();
-            const expireAt = validity === "always" ? "always" : Date.now() + (parseInt(validity) * 60 * 1000);
-
-            const visitorData = { code, phone, expireAt, lat: null, lon: null, telegramChatId: null };
-            visitorDatabase.push(visitorData);
-            localStorage.setItem('visitor_db', JSON.stringify(visitorDatabase));
-
-            const codeBox = document.getElementById('generated-code-box');
-            codeBox.style.display = "block";
-            codeBox.innerHTML = `✅ <b>નવો વિઝિટર કોડ બનેલ છે:</b><br>🔑 Passcode: <b>${code}</b><br>📱 Phone: ${phone}<br>⏱️ Expiration: ${validity === 'always' ? 'Always' : validity + ' Minutes'}`;
-        }
-
-        // 2. Visitor: Verify Code and Save GPS Location
-        function registerVisitor() {
-            const enteredCode = document.getElementById('visitor-code').value.trim();
-            const visitorStatus = document.getElementById('visitor-status');
-
-            const index = visitorDatabase.findIndex(v => v.code === enteredCode);
-            if(index === -1) {
-                visitorStatus.style.color = "#ff5252";
-                visitorStatus.innerHTML = "❌ ખોટો પાસકોડ!";
-                return;
-            }
-
-            const record = visitorDatabase[index];
-            if(record.expireAt !== "always" && Date.now() > record.expireAt) {
-                visitorStatus.style.color = "#ff5252";
-                visitorStatus.innerHTML = "⏳ પાસકોડ એક્સપાયર થઈ ગયો છે!";
-                return;
-            }
-
-            // Get GPS location
-            if(navigator.geolocation) {
-                visitorStatus.innerHTML = "⏳ તમારું Location લેવાઈ રહ્યું છે...";
-                navigator.geolocation.getCurrentPosition(position => {
-                    record.lat = position.coords.latitude;
-                    record.lon = position.coords.longitude;
-                    localStorage.setItem('visitor_db', JSON.stringify(visitorDatabase));
-                    currentVisitor = record;
-
-                    visitorStatus.style.color = "#00E676";
-                    visitorStatus.innerHTML = `✅ રજિસ્ટ્રેશન સફળ!<br>📍 GPS locked: ${record.lat.toFixed(4)}, ${record.lon.toFixed(4)}<br>તમારા ૧૦ મીટર વિસ્તારમાં જ એલર્ટ આવશે.`;
-                }, () => {
-                    visitorStatus.innerHTML = "⚠️ Location પરમિશન જરૂરી છે!";
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" }, 
+                    audio: false 
                 });
+                document.getElementById('webcam').srcObject = stream;
+                logMsg("Camera initialized successfully.", "success");
+            } catch (err) {
+                logMsg("Camera Error: " + err.message, "warn");
+            }
+
+            // Get Geolocation
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    pos => {
+                        currentLat = pos.coords.latitude.toFixed(5);
+                        currentLon = pos.coords.longitude.toFixed(5);
+                        logMsg(`GPS Locked: ${currentLat}, ${currentLon}`, "success");
+                    },
+                    err => logMsg("GPS Error: Using default Rajkot location", "warn")
+                );
             }
         }
 
-        // 3. Send Telegram Photo Alert directly via API
-        function triggerTelegramAlert(alertDetail, incidentLat = 0, incidentLon = 0) {
-            const canvas = document.getElementById('photoCanvas');
+        // --- 2. Dispatch Alerts to Telegram & Dual Gmail ---
+        function triggerDetectionAlert(detectionType, details) {
+            updateStatusBox(`ALERT: ${detectionType} Detected!`, true);
+            logMsg(`[ALERT] ${detectionType} detected! Dispatching notifications...`, "warn");
+
+            const canvas = document.getElementById('captureCanvas');
             const video = document.getElementById('webcam');
-            canvas.width = 320;
-            canvas.height = 240;
+            canvas.width = 640;
+            canvas.height = 480;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+            // A. Send Photo & Metadata to Telegram
             canvas.toBlob(blob => {
-                // A. ALWAYS Send to Admin
-                sendPhotoToTelegram(ADMIN_CHAT_ID, blob, `🚨 ADMIN ALERT: ${alertDetail}`);
+                sendTelegramAlert(blob, detectionType, details);
+            }, 'image/jpeg', 0.8);
 
-                // B. Check Registered Visitors within 10 meters
-                visitorDatabase.forEach(v => {
-                    if(v.lat && v.lon) {
-                        const dist = calculateDistance(incidentLat, incidentLon, v.lat, v.lon);
-                        if(dist <= 10 && v.telegramChatId) {
-                            sendPhotoToTelegram(v.telegramChatId, blob, `⚠️ ALERT: ${alertDetail} (તમારાથી ${Math.round(dist)}m દૂર!)`);
-                        }
-                    }
-                });
-            }, 'image/jpeg', 0.6);
+            // B. Send Email Alerts via EmailJS (To Highway & Forest Templates)
+            sendEmailAlerts(detectionType, details);
         }
 
-        function sendPhotoToTelegram(chatId, imageBlob, captionText) {
+        // Send Direct Photo to Telegram
+        function sendTelegramAlert(imageBlob, type, details) {
             const formData = new FormData();
-            formData.append("chat_id", chatId);
-            formData.append("photo", imageBlob, "threat.jpg");
-            formData.append("caption", captionText);
+            formData.append("chat_id", TELEGRAM_CHAT_ID);
+            formData.append("photo", imageBlob, "detection_snapshot.jpg");
+            formData.append("caption", 
+                `🚨 *CRITICAL SURVEILLANCE ALERT*\n\n` +
+                `📌 *Type:* ${type}\n` +
+                `📝 *Details:* ${details}\n` +
+                `📍 *Location:* https://maps.google.com/?q=${currentLat},${currentLon}\n` +
+                `⏰ *Time:* ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`
+            );
 
-            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+            fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
                 method: "POST",
                 body: formData
-            }).then(() => console.log("Telegram alert dispatched!"))
-              .catch(err => console.error("Telegram API Error:", err));
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok) logMsg("Telegram photo alert dispatched!", "success");
+                else logMsg("Telegram API Error", "warn");
+            })
+            .catch(err => logMsg("Telegram Network Error: " + err.message, "warn"));
         }
 
-        // Haversine formula to calculate distance in meters
-        function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371000;
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                      Math.sin(dLon/2) * Math.sin(dLon/2);
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        // Send Email to Both Department Templates
+        function sendEmailAlerts(type, details) {
+            const emailParams = {
+                alert_type: type,
+                details_message: details,
+                latitude: currentLat,
+                longitude: currentLon,
+                google_maps_link: `https://maps.google.com/?q=${currentLat},${currentLon}`,
+                timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+            };
+
+            // 1. Send to Highway Department
+            emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_HIGHWAY, emailParams)
+                .then(() => logMsg("Highway Dept Email Sent", "success"))
+                .catch(err => logMsg("Highway Email Failed: " + JSON.stringify(err), "warn"));
+
+            // 2. Send to Forest Department
+            emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_FOREST, emailParams)
+                .then(() => logMsg("Forest Dept Email Sent", "success"))
+                .catch(err => logMsg("Forest Email Failed: " + JSON.stringify(err), "warn"));
+            
+            setTimeout(() => updateStatusBox("SYSTEM ACTIVE - MONITORING", false), 8000);
         }
 
-        window.onload = setupCamera;
+        // Log Message Helper
+        function logMsg(msg, type = "info") {
+            const terminal = document.getElementById('log-terminal');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            terminal.appendChild(entry);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        // Status UI Handler
+        function updateStatusBox(text, isAlert = false) {
+            const box = document.getElementById('status-card');
+            box.innerText = text;
+            if (isAlert) box.classList.add('alert');
+            else box.classList.remove('alert');
+        }
+
+        // Start on Page Load
+        window.onload = initSystem;
     </script>
 </body>
 </html>
