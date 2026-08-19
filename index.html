@@ -3,486 +3,226 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RoadGuardian AI - Gmail Alert System</title>
-    <!-- TensorFlow.js and COCO-SSD Model -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
-    <!-- EmailJS SDK -->
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-
+    <title>Forest & Highway Telegram Guard System</title>
     <style>
-        * { box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #121212;
-            color: white;
-            text-align: center;
-            margin: 0;
-            padding: 15px;
-        }
-        h1 {
-            color: #00E676;
-            margin-top: 5px;
-            margin-bottom: 2px;
-            font-size: 24px;
-        }
-        p.subtitle {
-            color: #aaa;
-            margin-top: 0;
-            font-size: 13px;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: #121212; color: #fff; font-family: 'Segoe UI', Arial, sans-serif; text-align: center; padding: 15px; }
+        h1 { color: #00E676; margin-bottom: 15px; }
+        
+        .role-container { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
+        .role-btn { background: #222; color: #aaa; border: 2px solid #444; padding: 10px 20px; font-weight: bold; border-radius: 20px; cursor: pointer; flex: 1; max-width: 200px; }
+        .role-btn.active { background: #00E676; color: #000; border-color: #00E676; }
 
-        /* Nav Tabs */
-        .tab-container {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-        .tab-btn {
-            background-color: #222;
-            color: #888;
-            border: 2px solid #444;
-            padding: 10px 20px;
-            font-size: 14px;
-            font-weight: bold;
-            border-radius: 25px;
-            cursor: pointer;
-            transition: 0.3s;
-            flex: 1;
-            max-width: 200px;
-        }
-        .tab-btn.active {
-            background-color: #00E676;
-            color: #000;
-            border-color: #00E676;
-        }
+        .panel { display: none; background: #1e1e1e; border-radius: 12px; padding: 20px; max-width: 480px; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); text-align: left; }
+        .panel.active { display: block; }
 
-        /* Page Content */
-        .page-content { display: none; }
-        .page-content.active { display: block; }
+        label { display: block; margin-top: 10px; font-size: 14px; color: #aaa; }
+        input, select, button.action-btn { width: 100%; padding: 10px; margin-top: 5px; border-radius: 6px; border: 1px solid #333; background: #2a2a2a; color: #fff; font-size: 15px; }
+        button.action-btn { background: #00E676; color: #000; font-weight: bold; cursor: pointer; margin-top: 15px; border: none; }
+        button.action-btn:hover { background: #00c865; }
 
-        /* Status Header */
-        #status-box {
-            padding: 12px 20px;
-            font-size: 18px;
-            font-weight: bold;
-            border-radius: 8px;
-            display: inline-block;
-            width: 100%;
-            max-width: 480px;
-            background-color: #2e7d32;
-            color: white;
-            transition: 0.3s;
-            margin-bottom: 10px;
-        }
-        .danger {
-            background-color: #c62828 !important;
-            animation: pulse 1s infinite;
-        }
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.7; }
-            100% { opacity: 1; }
-        }
+        .status-box { padding: 12px; font-size: 16px; font-weight: bold; border-radius: 6px; text-align: center; margin-bottom: 15px; background: #2e7d32; }
+        .danger { background: #c62828 !important; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
-        #emailStatus {
-            font-size: 13px;
-            color: #ffeb3b;
-            margin-bottom: 10px;
-            font-weight: bold;
-        }
-
-        /* Test Email Button Styling */
-        .test-btn {
-            background-color: #2196F3;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 20px;
-            cursor: pointer;
-            margin-bottom: 15px;
-            font-weight: bold;
-            font-size: 14px;
-            box-shadow: 0 4px 10px rgba(33, 150, 243, 0.3);
-            transition: 0.2s;
-        }
-        .test-btn:active {
-            transform: scale(0.95);
-        }
-
-        /* Camera View */
-        #webcam-container {
-            position: relative;
-            display: inline-block;
-            border: 3px solid #333;
-            border-radius: 12px;
-            overflow: hidden;
-            background-color: #000;
-            width: 100%;
-            max-width: 480px;
-        }
-        video {
-            display: block;
-            width: 100%;
-            height: auto;
-        }
-
-        /* Email Log Styling */
-        .phone-container {
-            background-color: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 16px;
-            padding: 15px;
-            margin: 10px auto;
-            max-width: 480px;
-            text-align: left;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
-        .phone-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid #333;
-            padding-bottom: 10px;
-            margin-bottom: 15px;
-        }
-        .phone-header .sender {
-            font-weight: bold;
-            color: #00E676;
-            font-size: 15px;
-        }
-
-        /* Message List Container */
-        #message-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            max-height: 400px;
-            overflow-y: auto;
-            padding-right: 5px;
-        }
-
-        /* Individual Log Card */
-        .sms-item {
-            background-color: #263238;
-            border-left: 4px solid #29b6f6;
-            border-radius: 8px;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .sms-item.alert-mode {
-            background-color: #3e1212;
-            border-left: 4px solid #ff5252;
-        }
-        .sms-time {
-            font-size: 11px;
-            color: #aaa;
-            align-self: flex-end;
-        }
-        .sms-text {
-            font-size: 14px;
-            color: #fff;
-            line-height: 1.4;
-            word-break: break-word;
-        }
-
-        .clear-btn {
-            background-color: #333;
-            color: #ff5252;
-            border: 1px solid #ff5252;
-            padding: 8px;
-            font-size: 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 15px;
-            font-weight: bold;
-        }
-
-        .toast {
-            visibility: hidden;
-            min-width: 200px;
-            background-color: #00E676;
-            color: #000;
-            text-align: center;
-            border-radius: 20px;
-            padding: 10px;
-            position: fixed;
-            z-index: 100;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-weight: bold;
-        }
-        .toast.show {
-            visibility: visible;
-            animation: fadein 0.5s, fadeout 0.5s 2.5s;
-        }
-        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
-        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+        #webcam-container { position: relative; border: 2px solid #333; border-radius: 8px; overflow: hidden; background: #000; margin-top: 10px; }
+        video { width: 100%; display: block; }
+        .log-box { background: #181818; border: 1px solid #333; border-radius: 6px; padding: 10px; margin-top: 10px; max-height: 150px; overflow-y: auto; font-size: 12px; }
     </style>
 </head>
 <body>
 
-    <h1>RoadGuardian AI</h1>
-    <p class="subtitle">Rajkot-Gondal Highway Safety System</p>
+    <h1>🛡️ RoadGuardian & Forest AI</h1>
 
-    <!-- Navigation -->
-    <div class="tab-container">
-        <button class="tab-btn active" onclick="switchTab('camera')">📹 CAMERA</button>
-        <button class="tab-btn" onclick="switchTab('notifications')">📧 GMAIL LOGS</button>
+    <!-- Role Switcher -->
+    <div class="role-container">
+        <button class="role-btn active" onclick="switchRole('admin')">👨‍💼 Admin</button>
+        <button class="role-btn" onclick="switchRole('visitor')">👤 Visitor</button>
     </div>
 
-    <!-- Live Status Header -->
-    <div id="status-box">SAFE: ROAD CLEAR</div>
-    <div id="emailStatus">📧 Email Alert Ready</div>
+    <!-- ADMIN PANEL -->
+    <div id="admin-panel" class="panel active">
+        <h3>👨‍💼 Admin Management</h3>
+        <hr style="border-color:#333; margin:10px 0;">
+        
+        <label>૧. વિઝિટરનો મોબાઈલ નંબર:</label>
+        <input type="tel" id="admin-phone" placeholder="+91 9876543210">
 
-    <!-- Manual Test Button -->
-    <div>
-        <button class="test-btn" onclick="testEmailDirectly()">🧪 SEND TEST EMAIL</button>
-    </div>
+        <label>૨. કોડની સમય મર્યાદા (Validity):</label>
+        <select id="admin-validity">
+            <option value="10">10 Minutes</option>
+            <option value="60">1 Hour</option>
+            <option value="300">5 Hours</option>
+            <option value="600">10 Hours</option>
+            <option value="1440">24 Hours</option>
+            <option value="always">Always (Permanent)</option>
+        </select>
 
-    <!-- PAGE 1: CAMERA -->
-    <div id="camera-page" class="page-content active">
+        <button class="action-btn" onclick="generateVisitorCode()">🔑 Generat Code for Visitor</button>
+
+        <div id="generated-code-box" class="log-box" style="display:none; color:#00E676; margin-top:15px; font-size:14px;"></div>
+
+        <h4 style="margin-top:20px;">🖥️ Live Monitoring & Camera</h4>
+        <div id="status-box" class="status-box">SYSTEM ACTIVE - SAFE</div>
         <div id="webcam-container">
             <video id="webcam" autoplay playsinline muted></video>
         </div>
     </div>
 
-    <!-- PAGE 2: SAVED EMAIL LOGS -->
-    <div id="notifications-page" class="page-content">
-        <div class="phone-container">
-            <div class="phone-header">
-                <span class="sender">✉️ Gmail Alert Logs</span>
-            </div>
+    <!-- VISITOR PANEL -->
+    <div id="visitor-panel" class="panel">
+        <h3>👤 Visitor Portal</h3>
+        <hr style="border-color:#333; margin:10px 0;">
 
-            <div id="message-list">
-                <div style="color: #666; text-align: center; padding: 20px;" id="empty-msg">No Gmail alerts sent yet.</div>
-            </div>
+        <label>૧. Admin દ્વારા અપાયેલ ૬ અંકનો પાસકોડ નાખો:</label>
+        <input type="text" id="visitor-code" placeholder="123456">
 
-            <button class="clear-btn" onclick="clearAllMessages()">🗑️ CLEAR ALL LOGS</button>
-        </div>
+        <button class="action-btn" onclick="registerVisitor()">✅ Verify & Register Location</button>
+
+        <div id="visitor-status" class="log-box" style="margin-top:15px;">કૃપા કરીને કોડ નાખી રજિસ્ટર કરો.</div>
     </div>
 
     <canvas id="photoCanvas" style="display:none;"></canvas>
-    <div id="toast" class="toast">Action Completed!</div>
 
     <script>
-        const FIREBASE_URL = "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian/alert.json";
+        // --- ⚙️ Telegram Configuration ---
+        const BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"; // તમારો BotFather ટોકન
+        const ADMIN_CHAT_ID = "YOUR_ADMIN_CHAT_ID";   # તમારો Telegram User ID
 
-        // EmailJS Credentials
-        const EMAILJS_SERVICE_ID = "service_9t8ppxg";
-        const EMAILJS_TEMPLATE_ID = "template_1efdzc9"; 
-        const EMAILJS_PUBLIC_KEY = "ZXgCOupaENPcCchAD";
+        let visitorDatabase = JSON.parse(localStorage.getItem('visitor_db')) || [];
+        let currentVisitor = null;
+        let lastAlertTime = 0;
 
-        (function(){
-            emailjs.init(EMAILJS_PUBLIC_KEY);
-        })();
+        // Switch Roles
+        function switchRole(role) {
+            document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
 
-        const video = document.getElementById('webcam');
-        const statusBox = document.getElementById('status-box');
-        const emailStatus = document.getElementById('emailStatus');
-        const messageList = document.getElementById('message-list');
-        const photoCanvas = document.getElementById('photoCanvas');
-
-        let model = null;
-        let lastAlertState = -1;
-        let isCameraActive = true;
-        let lastEmailSentTime = 0;
-        let savedMessages = JSON.parse(localStorage.getItem('roadGuardian_email_logs')) || [];
-
-        // 1. Tab Switcher
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.page-content').forEach(page => page.classList.remove('active'));
-
-            if (tabName === 'camera') {
-                document.querySelectorAll('.tab-btn')[0].classList.add('active');
-                document.getElementById('camera-page').classList.add('active');
-                isCameraActive = true;
+            if(role === 'admin') {
+                document.querySelectorAll('.role-btn')[0].classList.add('active');
+                document.getElementById('admin-panel').classList.add('active');
             } else {
-                document.querySelectorAll('.tab-btn')[1].classList.add('active');
-                document.getElementById('notifications-page').classList.add('active');
-                isCameraActive = false;
-                renderSavedMessages();
+                document.querySelectorAll('.role-btn')[1].classList.add('active');
+                document.getElementById('visitor-panel').classList.add('active');
             }
         }
 
-        // 2. Setup Webcam
-        async function setupWebcam() {
-            return new Promise((resolve, reject) => {
-                navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" },
-                    audio: false
-                }).then((stream) => {
-                    video.srcObject = stream;
-                    video.onloadedmetadata = () => resolve();
-                }).catch((err) => reject(err));
-            });
-        }
-
-        // 3. Update Firebase
-        async function updateFirebase(alertState) {
-            if (alertState === lastAlertState) return;
-            lastAlertState = alertState;
-
+        // Setup Rear Camera
+        async function setupCamera() {
             try {
-                await fetch(FIREBASE_URL, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(alertState)
-                });
-            } catch (error) {
-                console.error("Firebase Update Failed:", error);
+                const video = document.getElementById('webcam');
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+                video.srcObject = stream;
+            } catch(e) {
+                console.error("Camera access failed", e);
             }
         }
 
-        // 4. Send Gmail Alert with Compressed Photo Attachment (< 50KB)
-        function sendAnimalGmailAlert(detectedAnimal) {
-            // Compress frame to 320x240 for EmailJS 50KB limit
-            photoCanvas.width = 320;
-            photoCanvas.height = 240;
-            const ctx = photoCanvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
-            
-            // Compress image quality to 50%
-            const imageBase64 = photoCanvas.toDataURL('image/jpeg', 0.5);
-            const time = new Date().toLocaleString();
+        // 1. Admin: Make Visitor Code
+        function generateVisitorCode() {
+            const phone = document.getElementById('admin-phone').value;
+            const validity = document.getElementById('admin-validity').value;
 
-            emailStatus.innerText = "⏳ Sending Gmail alert with photo...";
+            if(!phone) { alert("કૃપા કરીને ફોન નંબર લખો!"); return; }
 
-            const alertMsg = `🚨 ALERT: ${detectedAnimal} detected on Rajkot-Gondal Highway at ${time}. Drive with caution!`;
+            const code = Math.floor(100000 + Math.random() * 900000).toString();
+            const expireAt = validity === "always" ? "always" : Date.now() + (parseInt(validity) * 60 * 1000);
 
-            const templateParams = {
-                to_name: "Highway Patrol Officer",
-                alert_time: time,
-                image_data: imageBase64,
-                message: alertMsg
-            };
+            const visitorData = { code, phone, expireAt, lat: null, lon: null, telegramChatId: null };
+            visitorDatabase.push(visitorData);
+            localStorage.setItem('visitor_db', JSON.stringify(visitorDatabase));
 
-            emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
-                .then(function() {
-                    emailStatus.innerText = "✅ Gmail alert sent successfully!";
-                    addMessageToStorage(`✉️ Gmail sent: ${alertMsg}`, true);
-                    showToast("Email Sent!");
-                }, function(error) {
-                    emailStatus.innerText = "❌ Email failed to send.";
-                    addMessageToStorage(`❌ Gmail failed: ${error.text || 'Error'}`, true);
-                    showToast("Email Failed!");
-                });
+            const codeBox = document.getElementById('generated-code-box');
+            codeBox.style.display = "block";
+            codeBox.innerHTML = `✅ <b>નવો વિઝિટર કોડ બનેલ છે:</b><br>🔑 Passcode: <b>${code}</b><br>📱 Phone: ${phone}<br>⏱️ Expiration: ${validity === 'always' ? 'Always' : validity + ' Minutes'}`;
         }
 
-        // 5. Manual Direct Test Trigger
-        function testEmailDirectly() {
-            sendAnimalGmailAlert("MANUAL TEST ANIMAL");
-        }
+        // 2. Visitor: Verify Code and Save GPS Location
+        function registerVisitor() {
+            const enteredCode = document.getElementById('visitor-code').value.trim();
+            const visitorStatus = document.getElementById('visitor-status');
 
-        // 6. Local Storage Logging
-        function addMessageToStorage(msgText, isAlert) {
-            const time = new Date().toLocaleTimeString();
-            const date = new Date().toLocaleDateString();
-
-            const newMsgObj = {
-                id: Date.now(),
-                text: msgText,
-                time: `${date} ${time}`,
-                isAlert: isAlert
-            };
-
-            savedMessages.unshift(newMsgObj);
-            localStorage.setItem('roadGuardian_email_logs', JSON.stringify(savedMessages));
-        }
-
-        // 7. Render Saved Email Logs
-        function renderSavedMessages() {
-            if (savedMessages.length === 0) {
-                messageList.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">No Gmail alerts sent yet.</div>';
+            const index = visitorDatabase.findIndex(v => v.code === enteredCode);
+            if(index === -1) {
+                visitorStatus.style.color = "#ff5252";
+                visitorStatus.innerHTML = "❌ ખોટો પાસકોડ!";
                 return;
             }
 
-            let html = '';
-            savedMessages.forEach(msg => {
-                const alertClass = msg.isAlert ? 'alert-mode' : '';
-                html += `
-                    <div class="sms-item ${alertClass}">
-                        <div class="sms-time">🕒 ${msg.time}</div>
-                        <div class="sms-text">${msg.text}</div>
-                    </div>
-                `;
-            });
+            const record = visitorDatabase[index];
+            if(record.expireAt !== "always" && Date.now() > record.expireAt) {
+                visitorStatus.style.color = "#ff5252";
+                visitorStatus.innerHTML = "⏳ પાસકોડ એક્સપાયર થઈ ગયો છે!";
+                return;
+            }
 
-            messageList.innerHTML = html;
+            // Get GPS location
+            if(navigator.geolocation) {
+                visitorStatus.innerHTML = "⏳ તમારું Location લેવાઈ રહ્યું છે...";
+                navigator.geolocation.getCurrentPosition(position => {
+                    record.lat = position.coords.latitude;
+                    record.lon = position.coords.longitude;
+                    localStorage.setItem('visitor_db', JSON.stringify(visitorDatabase));
+                    currentVisitor = record;
+
+                    visitorStatus.style.color = "#00E676";
+                    visitorStatus.innerHTML = `✅ રજિસ્ટ્રેશન સફળ!<br>📍 GPS locked: ${record.lat.toFixed(4)}, ${record.lon.toFixed(4)}<br>તમારા ૧૦ મીટર વિસ્તારમાં જ એલર્ટ આવશે.`;
+                }, () => {
+                    visitorStatus.innerHTML = "⚠️ Location પરમિશન જરૂરી છે!";
+                });
+            }
         }
 
-        // 8. AI Detection Frame Loop
-        const targetAnimals = ['cat', 'dog', 'cow', 'horse', 'sheep', 'elephant', 'bear', 'zebra', 'giraffe'];
+        // 3. Send Telegram Photo Alert directly via API
+        function triggerTelegramAlert(alertDetail, incidentLat = 0, incidentLon = 0) {
+            const canvas = document.getElementById('photoCanvas');
+            const video = document.getElementById('webcam');
+            canvas.width = 320;
+            canvas.height = 240;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        async function detectFrame() {
-            if (model && isCameraActive) {
-                const predictions = await model.detect(video);
-                let isAnimalDetected = false;
-                let detectedName = "";
+            canvas.toBlob(blob => {
+                // A. ALWAYS Send to Admin
+                sendPhotoToTelegram(ADMIN_CHAT_ID, blob, `🚨 ADMIN ALERT: ${alertDetail}`);
 
-                predictions.forEach(prediction => {
-                    if (targetAnimals.includes(prediction.class.toLowerCase()) && prediction.score > 0.5) {
-                        isAnimalDetected = true;
-                        detectedName = prediction.class.toUpperCase();
+                // B. Check Registered Visitors within 10 meters
+                visitorDatabase.forEach(v => {
+                    if(v.lat && v.lon) {
+                        const dist = calculateDistance(incidentLat, incidentLon, v.lat, v.lon);
+                        if(dist <= 10 && v.telegramChatId) {
+                            sendPhotoToTelegram(v.telegramChatId, blob, `⚠️ ALERT: ${alertDetail} (તમારાથી ${Math.round(dist)}m દૂર!)`);
+                        }
                     }
                 });
-
-                if (isAnimalDetected) {
-                    statusBox.innerText = `WARNING: ${detectedName} DETECTED!`;
-                    statusBox.classList.add('danger');
-
-                    updateFirebase(1);
-
-                    // Send max 1 email every 15 seconds
-                    if (Date.now() - lastEmailSentTime > 15000) {
-                        sendAnimalGmailAlert(detectedName);
-                        lastEmailSentTime = Date.now();
-                    }
-                } else {
-                    statusBox.innerText = "SAFE: ROAD CLEAR";
-                    statusBox.classList.remove('danger');
-                    updateFirebase(0);
-                }
-            }
-            requestAnimationFrame(detectFrame);
+            }, 'image/jpeg', 0.6);
         }
 
-        function clearAllMessages() {
-            if (confirm("Are you sure you want to clear all Gmail logs?")) {
-                savedMessages = [];
-                localStorage.removeItem('roadGuardian_email_logs');
-                renderSavedMessages();
-                showToast("All Gmail Logs Cleared!");
-            }
+        function sendPhotoToTelegram(chatId, imageBlob, captionText) {
+            const formData = new FormData();
+            formData.append("chat_id", chatId);
+            formData.append("photo", imageBlob, "threat.jpg");
+            formData.append("caption", captionText);
+
+            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                method: "POST",
+                body: formData
+            }).then(() => console.log("Telegram alert dispatched!"))
+              .catch(err => console.error("Telegram API Error:", err));
         }
 
-        function showToast(msg) {
-            const toast = document.getElementById("toast");
-            toast.innerText = msg;
-            toast.className = "toast show";
-            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+        // Haversine formula to calculate distance in meters
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
-        // 9. Initialize
-        async function init() {
-            statusBox.innerText = "Loading AI Model...";
-            try {
-                await setupWebcam();
-                model = await cocoSsd.load();
-                statusBox.innerText = "SAFE: ROAD CLEAR";
-                detectFrame();
-            } catch (err) {
-                statusBox.innerText = "CAMERA ERROR / NO PERMISSION";
-            }
-        }
-
-        window.onload = init;
+        window.onload = setupCamera;
     </script>
 </body>
 </html>
