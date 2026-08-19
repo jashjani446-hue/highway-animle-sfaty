@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RoadGuardian & Forest AI Surveillance</title>
+    <title>RoadGuardian & Forest AI Terminal</title>
     <!-- EmailJS SDK -->
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <style>
@@ -56,7 +56,7 @@
 
         @keyframes blink { 
             0% { opacity: 1; } 
-            50% { opacity: 0.5; } 
+            50% { opacity: 0.6; } 
             100% { opacity: 1; } 
         }
 
@@ -77,7 +77,7 @@
             display: block; 
         }
 
-        /* Simple Log Terminal */
+        /* Log Terminal */
         .log-container { 
             margin-top: 12px; 
             background: #0d1117; 
@@ -105,70 +105,143 @@
         <!-- Status Box -->
         <div id="status-card" class="status-card">SYSTEM ACTIVE - MONITORING</div>
 
-        <!-- Camera Frame Only -->
+        <!-- Camera Frame -->
         <div class="camera-wrapper">
             <video id="webcam" autoplay playsinline muted></video>
         </div>
 
-        <!-- Minimal Log Output -->
+        <!-- Log Output -->
         <div id="log-terminal" class="log-container">
-            <div class="log-entry">[SYSTEM] Initializing camera & sensors...</div>
+            <div class="log-entry">[SYSTEM] Initializing system & Telegram menu...</div>
         </div>
     </div>
 
-    <!-- Hidden Canvas for Frame Capture -->
+    <!-- Canvas for Image Capture -->
     <canvas id="captureCanvas"></canvas>
 
     <script>
-        // --- ⚙️ Credentials & API Configuration ---
+        // --- ⚙️ Credentials Configuration ---
         const TELEGRAM_BOT_TOKEN = "8606654492:AAEJA73s0KDpqxPjthTNawpQlz7DYkddd1U";
         const TELEGRAM_CHAT_ID = "8517706642";
 
         const EMAILJS_SERVICE_ID = "service_9t8ppxg";
         const EMAILJS_PUBLIC_KEY = "ZXgCOupaENPcCchAD";
         
-        // Department Template IDs
-        const EMAILJS_TEMPLATE_HIGHWAY = "template_1efdzc9"; // Highway Dept
-        const EMAILJS_TEMPLATE_FOREST = "template_cvp7e1i";  // Forest Dept
+        const EMAILJS_TEMPLATE_HIGHWAY = "template_1efdzc9"; 
+        const EMAILJS_TEMPLATE_FOREST = "template_cvp7e1i";  
 
-        let currentLat = "22.3039"; // Default Rajkot Coordinates
+        let currentLat = "22.3039"; 
         let currentLon = "70.8022";
+        let lastUpdateId = 0;
 
         // Initialize EmailJS
         emailjs.init(EMAILJS_PUBLIC_KEY);
 
-        // --- 1. Camera & GPS Initialization ---
+        // --- 1. Camera & GPS Setup ---
         async function initSystem() {
-            logMsg("Requesting camera access...", "info");
+            logMsg("Initializing webcam stream...", "info");
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: "environment" }, 
                     audio: false 
                 });
                 document.getElementById('webcam').srcObject = stream;
-                logMsg("Camera initialized successfully.", "success");
+                logMsg("Camera active.", "success");
             } catch (err) {
-                logMsg("Camera Error: " + err.message, "warn");
+                logMsg("Camera Access Denied: " + err.message, "warn");
             }
 
-            // Get Geolocation
+            // Get GPS Location
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
                     pos => {
                         currentLat = pos.coords.latitude.toFixed(5);
                         currentLon = pos.coords.longitude.toFixed(5);
-                        logMsg(`GPS Locked: ${currentLat}, ${currentLon}`, "success");
+                        logMsg(`GPS Coordinates Locked: ${currentLat}, ${currentLon}`, "success");
                     },
-                    err => logMsg("GPS Error: Using default Rajkot location", "warn")
+                    err => logMsg("GPS Error: Using Default Location", "warn")
                 );
+            }
+
+            // Setup Telegram Keyboard Options & Start Listener
+            setupTelegramMenuOptions();
+            setInterval(pollTelegramCommands, 2500); // Check for menu button clicks every 2.5 seconds
+        }
+
+        // --- 2. Telegram Menu Options Setup ---
+        function setupTelegramMenuOptions() {
+            const menuPayload = {
+                chat_id: TELEGRAM_CHAT_ID,
+                text: "🤖 *RoadGuardian & Forest AI Control Panel*\n\nકૃપા કરીને નીચેના વિકલ્પોમાંથી પસંદ કરો:",
+                parse_mode: "Markdown",
+                reply_markup: {
+                    keyboard: [
+                        [{ text: "📸 Take Live Snapshot" }, { text: "🚨 Trigger Emergency Alert" }],
+                        [{ text: "📍 Get GPS Location" }, { text: "📊 Check System Status" }]
+                    ],
+                    resize_keyboard: true,
+                    persistent: true
+                }
+            };
+
+            fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(menuPayload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok) logMsg("Telegram Options Keyboard Activated!", "success");
+            })
+            .catch(err => logMsg("Menu Setup Failed: " + err.message, "warn"));
+        }
+
+        // --- 3. Telegram Button Clicks Listener (Polling) ---
+        function pollTelegramCommands() {
+            fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok && data.result.length > 0) {
+                    data.result.forEach(update => {
+                        lastUpdateId = update.update_id;
+                        if (update.message && update.message.text) {
+                            handleTelegramCommand(update.message.text);
+                        }
+                    });
+                }
+            })
+            .catch(err => console.log("Polling...", err));
+        }
+
+        // --- 4. Handle Option Selection ---
+        function handleTelegramCommand(commandText) {
+            logMsg(`Telegram Command Received: "${commandText}"`, "info");
+
+            switch (commandText) {
+                case "📸 Take Live Snapshot":
+                    captureAndSendSnapshot("Manual Request from Telegram Menu");
+                    break;
+
+                case "🚨 Trigger Emergency Alert":
+                    triggerFullAlert("Emergency Alert Triggered via Telegram Menu");
+                    break;
+
+                case "📍 Get GPS Location":
+                    sendTelegramTextMessage(`📍 *Current System Coordinates*\n\nLatitude: \`${currentLat}\`\nLongitude: \`${currentLon}\`\n\n🔗 Maps Link: https://maps.google.com/?q=${currentLat},${currentLon}`);
+                    break;
+
+                case "📊 Check System Status":
+                    sendTelegramTextMessage(`📊 *System Health Report*\n\n✅ Camera: Active\n✅ GPS: Locked (${currentLat}, ${currentLon})\n✅ Gmail Service: Active\n⏰ Time: ${new Date().toLocaleString('en-IN')}`);
+                    break;
+
+                default:
+                    setupTelegramMenuOptions(); // Reset Keyboard if unknown command
+                    break;
             }
         }
 
-        // --- 2. Dispatch Alerts to Telegram & Dual Gmail ---
-        function triggerDetectionAlert(detectionType, details) {
-            updateStatusBox(`ALERT: ${detectionType} Detected!`, true);
-            logMsg(`[ALERT] ${detectionType} detected! Dispatching notifications...`, "warn");
-
+        // --- 5. Action Functions ---
+        function captureAndSendSnapshot(reason) {
             const canvas = document.getElementById('captureCanvas');
             const video = document.getElementById('webcam');
             canvas.width = 640;
@@ -176,65 +249,50 @@
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            // A. Send Photo & Metadata to Telegram
             canvas.toBlob(blob => {
-                sendTelegramAlert(blob, detectionType, details);
+                const formData = new FormData();
+                formData.append("chat_id", TELEGRAM_CHAT_ID);
+                formData.append("photo", blob, "snapshot.jpg");
+                formData.append("caption", `📸 *LIVE SNAPSHOT*\n\n📌 *Reason:* ${reason}\n⏰ *Time:* ${new Date().toLocaleString('en-IN')}`);
+
+                fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+                    method: "POST",
+                    body: formData
+                })
+                .then(() => logMsg("Snapshot sent to Telegram", "success"))
+                .catch(err => logMsg("Snapshot upload error", "warn"));
             }, 'image/jpeg', 0.8);
-
-            // B. Send Email Alerts via EmailJS (To Highway & Forest Templates)
-            sendEmailAlerts(detectionType, details);
         }
 
-        // Send Direct Photo to Telegram
-        function sendTelegramAlert(imageBlob, type, details) {
-            const formData = new FormData();
-            formData.append("chat_id", TELEGRAM_CHAT_ID);
-            formData.append("photo", imageBlob, "detection_snapshot.jpg");
-            formData.append("caption", 
-                `🚨 *CRITICAL SURVEILLANCE ALERT*\n\n` +
-                `📌 *Type:* ${type}\n` +
-                `📝 *Details:* ${details}\n` +
-                `📍 *Location:* https://maps.google.com/?q=${currentLat},${currentLon}\n` +
-                `⏰ *Time:* ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`
-            );
+        function triggerFullAlert(details) {
+            updateStatusBox("EMERGENCY ALERT SENT", true);
+            captureAndSendSnapshot("🚨 EMERGENCY THREAT DETECTED!");
 
-            fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
-                method: "POST",
-                body: formData
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.ok) logMsg("Telegram photo alert dispatched!", "success");
-                else logMsg("Telegram API Error", "warn");
-            })
-            .catch(err => logMsg("Telegram Network Error: " + err.message, "warn"));
-        }
-
-        // Send Email to Both Department Templates
-        function sendEmailAlerts(type, details) {
+            // Send Email to Both Gmail Templates
             const emailParams = {
-                alert_type: type,
+                alert_type: "MANUAL EMERGENCY",
                 details_message: details,
                 latitude: currentLat,
                 longitude: currentLon,
                 google_maps_link: `https://maps.google.com/?q=${currentLat},${currentLon}`,
-                timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+                timestamp: new Date().toLocaleString('en-IN')
             };
 
-            // 1. Send to Highway Department
-            emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_HIGHWAY, emailParams)
-                .then(() => logMsg("Highway Dept Email Sent", "success"))
-                .catch(err => logMsg("Highway Email Failed: " + JSON.stringify(err), "warn"));
+            emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_HIGHWAY, emailParams);
+            emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_FOREST, emailParams);
 
-            // 2. Send to Forest Department
-            emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_FOREST, emailParams)
-                .then(() => logMsg("Forest Dept Email Sent", "success"))
-                .catch(err => logMsg("Forest Email Failed: " + JSON.stringify(err), "warn"));
-            
-            setTimeout(() => updateStatusBox("SYSTEM ACTIVE - MONITORING", false), 8000);
+            logMsg("Emergency emails dispatched to Highway & Forest Depts", "warn");
+            setTimeout(() => updateStatusBox("SYSTEM ACTIVE - MONITORING", false), 6000);
         }
 
-        // Log Message Helper
+        function sendTelegramTextMessage(msg) {
+            fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: msg, parse_mode: "Markdown" })
+            });
+        }
+
         function logMsg(msg, type = "info") {
             const terminal = document.getElementById('log-terminal');
             const entry = document.createElement('div');
@@ -244,7 +302,6 @@
             terminal.scrollTop = terminal.scrollHeight;
         }
 
-        // Status UI Handler
         function updateStatusBox(text, isAlert = false) {
             const box = document.getElementById('status-card');
             box.innerText = text;
@@ -252,7 +309,6 @@
             else box.classList.remove('alert');
         }
 
-        // Start on Page Load
         window.onload = initSystem;
     </script>
 </body>
