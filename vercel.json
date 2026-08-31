@@ -12,15 +12,19 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "index.py"
-    },
-    {
       "src": "/webhook",
       "dest": "index.py"
     },
     {
+      "src": "/api/webhook",
+      "dest": "index.py"
+    },
+    {
       "src": "/alert",
+      "dest": "index.py"
+    },
+    {
+      "src": "/api/alert",
       "dest": "index.py"
     },
     {
