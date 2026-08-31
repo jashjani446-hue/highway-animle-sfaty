@@ -3,12 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RoadGuardian AI - Gmail Alert System</title>
+    <title>RoadGuardian AI - Live Detection Dashboard</title>
     <!-- TensorFlow.js and COCO-SSD Model -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
-    <!-- EmailJS SDK -->
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 
     <style>
         * { box-sizing: border-box; }
@@ -86,16 +84,15 @@
             100% { opacity: 1; }
         }
 
-        #emailStatus {
+        #alertStatus {
             font-size: 13px;
             color: #ffeb3b;
             margin-bottom: 10px;
             font-weight: bold;
         }
 
-        /* Test Email Button Styling */
         .test-btn {
-            background-color: #2196F3;
+            background-color: #0088cc;
             color: white;
             padding: 10px 20px;
             border: none;
@@ -104,7 +101,7 @@
             margin-bottom: 15px;
             font-weight: bold;
             font-size: 14px;
-            box-shadow: 0 4px 10px rgba(33, 150, 243, 0.3);
+            box-shadow: 0 4px 10px rgba(0, 136, 204, 0.4);
             transition: 0.2s;
         }
         .test-btn:active {
@@ -128,7 +125,7 @@
             height: auto;
         }
 
-        /* Email Log Styling */
+        /* Logs Styling */
         .phone-container {
             background-color: #1a1a1a;
             border: 1px solid #333;
@@ -153,7 +150,6 @@
             font-size: 15px;
         }
 
-        /* Message List Container */
         #message-list {
             display: flex;
             flex-direction: column;
@@ -163,10 +159,9 @@
             padding-right: 5px;
         }
 
-        /* Individual Log Card */
         .sms-item {
             background-color: #263238;
-            border-left: 4px solid #29b6f6;
+            border-left: 4px solid #0088cc;
             border-radius: 8px;
             padding: 12px;
             display: flex;
@@ -228,21 +223,21 @@
 <body>
 
     <h1>RoadGuardian AI</h1>
-    <p class="subtitle">Rajkot-Gondal Highway Safety System</p>
+    <p class="subtitle">Rajkot-Gondal Highway Safety Dashboard</p>
 
     <!-- Navigation -->
     <div class="tab-container">
         <button class="tab-btn active" onclick="switchTab('camera')">📹 CAMERA</button>
-        <button class="tab-btn" onclick="switchTab('notifications')">📧 GMAIL LOGS</button>
+        <button class="tab-btn" onclick="switchTab('notifications')">📱 LOGS</button>
     </div>
 
     <!-- Live Status Header -->
     <div id="status-box">SAFE: ROAD CLEAR</div>
-    <div id="emailStatus">📧 Email Alert Ready</div>
+    <div id="alertStatus">📱 Telegram Bot Ready</div>
 
     <!-- Manual Test Button -->
     <div>
-        <button class="test-btn" onclick="testEmailDirectly()">🧪 SEND TEST EMAIL</button>
+        <button class="test-btn" onclick="testTelegramDirectly()">🧪 SEND TEST TELEGRAM PHOTO</button>
     </div>
 
     <!-- PAGE 1: CAMERA -->
@@ -252,17 +247,15 @@
         </div>
     </div>
 
-    <!-- PAGE 2: SAVED EMAIL LOGS -->
+    <!-- PAGE 2: SAVED LOGS -->
     <div id="notifications-page" class="page-content">
         <div class="phone-container">
             <div class="phone-header">
-                <span class="sender">✉️ Gmail Alert Logs</span>
+                <span class="sender">📱 Sent Telegram Logs</span>
             </div>
-
             <div id="message-list">
-                <div style="color: #666; text-align: center; padding: 20px;" id="empty-msg">No Gmail alerts sent yet.</div>
+                <div style="color: #666; text-align: center; padding: 20px;">No alerts sent yet.</div>
             </div>
-
             <button class="clear-btn" onclick="clearAllMessages()">🗑️ CLEAR ALL LOGS</button>
         </div>
     </div>
@@ -272,29 +265,21 @@
 
     <script>
         const FIREBASE_URL = "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian/alert.json";
-
-        // EmailJS Credentials
-        const EMAILJS_SERVICE_ID = "service_9t8ppxg";
-        const EMAILJS_TEMPLATE_ID = "template_1efdzc9"; 
-        const EMAILJS_PUBLIC_KEY = "ZXgCOupaENPcCchAD";
-
-        (function(){
-            emailjs.init(EMAILJS_PUBLIC_KEY);
-        })();
+        const SERVER_URL = "/api/alert";
 
         const video = document.getElementById('webcam');
         const statusBox = document.getElementById('status-box');
-        const emailStatus = document.getElementById('emailStatus');
+        const alertStatus = document.getElementById('alertStatus');
         const messageList = document.getElementById('message-list');
         const photoCanvas = document.getElementById('photoCanvas');
 
         let model = null;
         let lastAlertState = -1;
         let isCameraActive = true;
-        let lastEmailSentTime = 0;
-        let savedMessages = JSON.parse(localStorage.getItem('roadGuardian_email_logs')) || [];
+        let lastTelegramSentTime = 0;
+        let savedMessages = JSON.parse(localStorage.getItem('roadGuardian_telegram_logs')) || [];
 
-        // 1. Tab Switcher
+        // Tab Switcher
         function switchTab(tabName) {
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.page-content').forEach(page => page.classList.remove('active'));
@@ -311,7 +296,7 @@
             }
         }
 
-        // 2. Setup Webcam
+        // Setup Webcam
         async function setupWebcam() {
             return new Promise((resolve, reject) => {
                 navigator.mediaDevices.getUserMedia({
@@ -324,7 +309,7 @@
             });
         }
 
-        // 3. Update Firebase
+        // Update Firebase
         async function updateFirebase(alertState) {
             if (alertState === lastAlertState) return;
             lastAlertState = alertState;
@@ -340,66 +325,62 @@
             }
         }
 
-        // 4. Send Gmail Alert with Compressed Photo Attachment (< 50KB)
-        function sendAnimalGmailAlert(detectedAnimal) {
-            // Compress frame to 320x240 for EmailJS 50KB limit
-            photoCanvas.width = 320;
-            photoCanvas.height = 240;
+        // Send Photo Alert directly to Telegram Bot
+        function sendAnimalTelegramAlert(detectedAnimal) {
+            photoCanvas.width = 640;
+            photoCanvas.height = 480;
             const ctx = photoCanvas.getContext('2d');
             ctx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
-            
-            // Compress image quality to 50%
-            const imageBase64 = photoCanvas.toDataURL('image/jpeg', 0.5);
-            const time = new Date().toLocaleString();
 
-            emailStatus.innerText = "⏳ Sending Gmail alert with photo...";
+            alertStatus.innerText = "⏳ Capturing photo and sending to Telegram...";
 
-            const alertMsg = `🚨 ALERT: ${detectedAnimal} detected on Rajkot-Gondal Highway at ${time}. Drive with caution!`;
+            photoCanvas.toBlob(async (blob) => {
+                const formData = new FormData();
+                formData.append("photo", blob, "animal_detection.jpg");
+                formData.append("animal", detectedAnimal);
 
-            const templateParams = {
-                to_name: "Highway Patrol Officer",
-                alert_time: time,
-                image_data: imageBase64,
-                message: alertMsg
-            };
+                try {
+                    const response = await fetch(SERVER_URL, {
+                        method: "POST",
+                        body: formData
+                    });
+                    const result = await response.json();
 
-            emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
-                .then(function() {
-                    emailStatus.innerText = "✅ Gmail alert sent successfully!";
-                    addMessageToStorage(`✉️ Gmail sent: ${alertMsg}`, true);
-                    showToast("Email Sent!");
-                }, function(error) {
-                    emailStatus.innerText = "❌ Email failed to send.";
-                    addMessageToStorage(`❌ Gmail failed: ${error.text || 'Error'}`, true);
-                    showToast("Email Failed!");
-                });
+                    if (response.ok) {
+                        alertStatus.innerText = `✅ Photo sent via Telegram to ${result.sent_to || 0} user(s)!`;
+                        addMessageToStorage(`📱 Sent Telegram Alert: ${detectedAnimal} (${result.sent_to || 0} users)`, true);
+                        showToast("Telegram Photo Sent!");
+                    } else {
+                        alertStatus.innerText = `❌ Server Error: ${result.error || 'Failed'}`;
+                    }
+                } catch (err) {
+                    console.error("Connection Failed:", err);
+                    alertStatus.innerText = "❌ Cannot connect to Server!";
+                }
+            }, "image/jpeg", 0.8);
         }
 
-        // 5. Manual Direct Test Trigger
-        function testEmailDirectly() {
-            sendAnimalGmailAlert("MANUAL TEST ANIMAL");
+        function testTelegramDirectly() {
+            sendAnimalTelegramAlert("TEST ANIMAL");
         }
 
-        // 6. Local Storage Logging
         function addMessageToStorage(msgText, isAlert) {
             const time = new Date().toLocaleTimeString();
             const date = new Date().toLocaleDateString();
 
-            const newMsgObj = {
+            savedMessages.unshift({
                 id: Date.now(),
                 text: msgText,
                 time: `${date} ${time}`,
                 isAlert: isAlert
-            };
+            });
 
-            savedMessages.unshift(newMsgObj);
-            localStorage.setItem('roadGuardian_email_logs', JSON.stringify(savedMessages));
+            localStorage.setItem('roadGuardian_telegram_logs', JSON.stringify(savedMessages));
         }
 
-        // 7. Render Saved Email Logs
         function renderSavedMessages() {
             if (savedMessages.length === 0) {
-                messageList.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">No Gmail alerts sent yet.</div>';
+                messageList.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">No alerts sent yet.</div>';
                 return;
             }
 
@@ -417,7 +398,7 @@
             messageList.innerHTML = html;
         }
 
-        // 8. AI Detection Frame Loop
+        // AI Detection Loop
         const targetAnimals = ['cat', 'dog', 'cow', 'horse', 'sheep', 'elephant', 'bear', 'zebra', 'giraffe'];
 
         async function detectFrame() {
@@ -439,10 +420,10 @@
 
                     updateFirebase(1);
 
-                    // Send max 1 email every 15 seconds
-                    if (Date.now() - lastEmailSentTime > 15000) {
-                        sendAnimalGmailAlert(detectedName);
-                        lastEmailSentTime = Date.now();
+                    // Send max 1 image every 15 seconds
+                    if (Date.now() - lastTelegramSentTime > 15000) {
+                        sendAnimalTelegramAlert(detectedName);
+                        lastTelegramSentTime = Date.now();
                     }
                 } else {
                     statusBox.innerText = "SAFE: ROAD CLEAR";
@@ -454,11 +435,11 @@
         }
 
         function clearAllMessages() {
-            if (confirm("Are you sure you want to clear all Gmail logs?")) {
+            if (confirm("Are you sure you want to clear all logs?")) {
                 savedMessages = [];
-                localStorage.removeItem('roadGuardian_email_logs');
+                localStorage.removeItem('roadGuardian_telegram_logs');
                 renderSavedMessages();
-                showToast("All Gmail Logs Cleared!");
+                showToast("All Logs Cleared!");
             }
         }
 
@@ -469,7 +450,6 @@
             setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
         }
 
-        // 9. Initialize
         async function init() {
             statusBox.innerText = "Loading AI Model...";
             try {
@@ -483,8 +463,6 @@
         }
 
         window.onload = init;
-// Uses Vercel's endpoint directly
-const TERMUX_SERVER_URL = "/api/alert";
     </script>
 </body>
 </html>
