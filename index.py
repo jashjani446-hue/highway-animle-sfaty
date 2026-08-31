@@ -39,7 +39,7 @@ def get_firebase_data(path):
         print(f"Firebase Get Error: {e}")
     return {}
 
-def is_admin(chat_id):
+def is_admin(8517706642):
     admins = get_firebase_data("admins")
     if isinstance(admins, dict):
         return str(chat_id) in admins
