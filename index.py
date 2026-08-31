@@ -11,7 +11,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 BOT_TOKEN = "8560832618:AAFxHDrVvAEHDR1zKUtK1glQq0RWMsYrWXk"
 ADMIN_PASSWORD = "jash@2310"
 
-# Firebase URLs
+# Firebase Base URL
 FIREBASE_BASE_URL = "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian"
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -33,30 +33,29 @@ def get_firebase_data(path):
     try:
         url = f"{FIREBASE_BASE_URL}/{path}.json"
         res = requests.get(url, timeout=3)
-        if res.ok:
+        if res.ok and res.json() is not None:
             return res.json()
     except Exception as e:
         print(f"Firebase Get Error: {e}")
-    return None
+    return {}
 
 def is_admin(chat_id):
-    admins = get_firebase_data("admins") or {}
+    admins = get_firebase_data("admins")
     return str(chat_id) in admins
 
 def add_admin(chat_id):
     set_firebase_data(f"admins/{chat_id}", True)
 
 def save_visitor_code(code, phone, duration_str):
-    # સમયગાળા ગણતરી (સેકન્ડમાં)
     seconds_map = {
         "10m": 10 * 60,
         "1h": 3600,
         "5h": 5 * 3600,
         "10h": 10 * 3600,
         "24h": 24 * 3600,
-        "always": 100 * 365 * 86400  # 100 years
+        "always": 100 * 365 * 86400
     }
-    dur_sec = seconds_map.get(duration_str, 3600)
+    dur_sec = seconds_map.get(duration_str.lower(), 3600)
     
     code_data = {
         "phone": phone,
@@ -67,20 +66,19 @@ def save_visitor_code(code, phone, duration_str):
     set_firebase_data(f"codes/{code}", code_data)
 
 def verify_and_register_visitor(chat_id, code):
-    codes = get_firebase_data("codes") or {}
+    codes = get_firebase_data("codes")
     if code in codes:
         c_data = codes[code]
         expire_timestamp = time.time() + c_data["dur_sec"]
         
         subscriber_data = {
             "code": code,
-            "phone": c_data["phone"],
-            "duration": c_data["duration_str"],
+            "phone": c_data.get("phone", ""),
+            "duration": c_data.get("duration_str", ""),
             "expire_at": expire_timestamp
         }
-        # Save subscriber under active_subscribers in Firebase
         set_firebase_data(f"subscribers/{chat_id}", subscriber_data)
-        return True, c_data["duration_str"]
+        return True, c_data.get("duration_str", "")
     return False, None
 
 def get_active_recipients():
@@ -88,22 +86,24 @@ def get_active_recipients():
     now = time.time()
 
     # 1. Add all Admins
-    admins = get_firebase_data("admins") or {}
-    for admin_id in admins.keys():
-        recipients.add(int(admin_id))
+    admins = get_firebase_data("admins")
+    if isinstance(admins, dict):
+        for admin_id in admins.keys():
+            recipients.add(int(admin_id))
 
-    # 2. Add Valid Subscribers (જ્યાં સુધી Validity બાકી હોય)
-    subscribers = get_firebase_data("subscribers") or {}
-    for cid, sdata in subscribers.items():
-        if isinstance(sdata, dict):
-            expire_at = sdata.get("expire_at", 0)
-            if expire_at > now:
-                recipients.add(int(cid))
+    # 2. Add Valid Visitors/Subscribers
+    subscribers = get_firebase_data("subscribers")
+    if isinstance(subscribers, dict):
+        for cid, sdata in subscribers.items():
+            if isinstance(sdata, dict):
+                expire_at = sdata.get("expire_at", 0)
+                if expire_at > now:
+                    recipients.add(int(cid))
 
     return list(recipients)
 
 
-# --- KEYBOARDS (તમારું જૂનું UI) ---
+# --- KEYBOARDS (જૂનું UI) ---
 
 def main_menu_keyboard(chat_id):
     markup = InlineKeyboardMarkup()
@@ -154,7 +154,7 @@ def highway_dept_keyboard():
     return markup
 
 
-# --- TELEGRAM BOT LOGIC ---
+# --- TELEGRAM BOT HANDLERS ---
 
 @bot.message_handler(commands=['start', 'menu'])
 def send_welcome(message):
@@ -213,19 +213,19 @@ def handle_text_inputs(message):
     text = message.text.strip()
     state = user_states.get(chat_id)
 
-    # 1. Check Admin Password Input
-    if text == ADMIN_PASSWORD or state == "awaiting_admin_password":
-        if text == ADMIN_PASSWORD:
-            add_admin(chat_id)
-            bot.reply_to(message, "🎉 *Admin Access Granted!*", parse_mode="Markdown", reply_markup=admin_menu_keyboard())
-            user_states.pop(chat_id, None)
-            return
-        else:
-            bot.reply_to(message, "❌ Incorrect Password!")
-            user_states.pop(chat_id, None)
-            return
+    # 1. Admin Password Input
+    if text == ADMIN_PASSWORD:
+        add_admin(chat_id)
+        bot.reply_to(message, "🎉 *Admin Access Granted!*", parse_mode="Markdown", reply_markup=admin_menu_keyboard())
+        user_states.pop(chat_id, None)
+        return
 
-    # 2. Check Visitor Code Generation (Phone input)
+    if state == "awaiting_admin_password":
+        bot.reply_to(message, "❌ Incorrect Password!")
+        user_states.pop(chat_id, None)
+        return
+
+    # 2. Creating Visitor Code (Phone Number Input)
     if isinstance(state, dict) and state.get("action") == "awaiting_phone":
         duration = state.get("duration")
         phone = text
@@ -234,15 +234,17 @@ def handle_text_inputs(message):
         save_visitor_code(code, phone, duration)
         bot.reply_to(message, f"✅ *Visitor Code Created!*\n\n🎟️ Code: `{code}`\n📱 Phone: {phone}\n⏱️ Duration: {duration}", parse_mode="Markdown")
         user_states.pop(chat_id, None)
+        return
 
-    # 3. Check Visitor Code Input by End User
-    elif state == "awaiting_visitor_code":
+    # 3. Visitor Code Entry
+    if state == "awaiting_visitor_code":
         success, duration = verify_and_register_visitor(chat_id, text)
         if success:
             bot.reply_to(message, f"🎉 *Visitor Code Verified!*\n\nWelcome! Your Chat ID has been saved.\n⏱️ Access Duration: *{duration}*\n\nYou will now receive live alert photos!", parse_mode="Markdown")
         else:
             bot.reply_to(message, "❌ Invalid or Expired Pass Code!")
         user_states.pop(chat_id, None)
+        return
 
 
 # --- API ROUTES ---
@@ -257,11 +259,9 @@ def receive_alert_from_web():
     photo_file = request.files['photo']
     photo_bytes = photo_file.read()
 
-    # Get valid recipients from Firebase (Admins + Valid Subscribers)
     recipients = get_active_recipients()
 
     if not recipients:
-        print("⚠️ Alert triggered, but no active users or valid visitors found.")
         return jsonify({"status": "No active recipients found", "sent_to": 0}), 200
 
     caption = f"🚨 *ROADGUARDIAN ALERT*\n\n🐾 *Animal Detected:* {animal}\n📍 *Location:* Rajkot-Gondal Highway\n⚠️ *Drive with caution!*"
@@ -277,7 +277,7 @@ def receive_alert_from_web():
             )
             success_count += 1
         except Exception as e:
-            print(f"❌ Failed to send photo to {cid}: {e}")
+            print(f"Failed to send photo to {cid}: {e}")
 
     return jsonify({"status": "Alert sent", "sent_to": success_count}), 200
 
