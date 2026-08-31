@@ -1,5 +1,4 @@
 import os
-import time
 import random
 import string
 from flask import Flask, request, jsonify
@@ -14,14 +13,11 @@ bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 CORS(app)
 
-# Data Stores
 authorized_admins = set()
-visitor_codes = {}  # {code: {"duration": str, "expires": timestamp, "phone": str}}
+visitor_codes = {}
 monitored_chats = set()
+user_states = {}
 
-user_states = {}  # Track state for inputs
-
-# --- HELPER KEYBOARDS ---
 def main_menu_keyboard(chat_id):
     markup = InlineKeyboardMarkup()
     if chat_id in authorized_admins:
@@ -70,7 +66,6 @@ def highway_dept_keyboard():
     markup.add(InlineKeyboardButton("🔙 Back", callback_data="admin_monitoring"))
     return markup
 
-# --- TELEGRAM BOT LOGIC ---
 @bot.message_handler(commands=['start', 'menu'])
 def send_welcome(message):
     chat_id = message.chat.id
@@ -154,8 +149,6 @@ def handle_text_inputs(message):
             bot.reply_to(message, "❌ Invalid Pass Code!")
         user_states.pop(chat_id, None)
 
-# --- VERCEL FLASK ENDPOINTS ---
-
 @app.route('/api/webhook', methods=['POST'])
 @app.route('/webhook', methods=['POST'])
 def telegram_webhook():
@@ -175,7 +168,6 @@ def receive_alert_from_web():
     animal = request.form['animal']
     photo_file = request.files['photo']
 
-    # Broadcast to all authorized admins & verified visitors
     recipients = authorized_admins.union(monitored_chats)
 
     if not recipients:
@@ -195,6 +187,5 @@ def receive_alert_from_web():
     return jsonify({"status": "Alert sent", "sent_to": success_count}), 200
 
 @app.route('/api', methods=['GET'])
-@app.route('/', methods=['GET'])
 def health():
     return "🚀 RoadGuardian Active!", 200
