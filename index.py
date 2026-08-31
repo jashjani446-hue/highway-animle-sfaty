@@ -39,7 +39,7 @@ def get_firebase_data(path):
         print(f"Firebase Get Error: {e}")
     return {}
 
-def is_admin(8517706642):
+def is_admin(chat_id):
     admins = get_firebase_data("admins")
     if isinstance(admins, dict):
         return str(chat_id) in admins
@@ -97,7 +97,7 @@ def get_active_recipients():
             except Exception:
                 pass
 
-    # 2. Add Valid Subscribers/Visitors
+    # 2. Add Valid Visitors/Subscribers (સુધી Validity બાકી હોય ત્યાં સુધી)
     subscribers = get_firebase_data("subscribers")
     if isinstance(subscribers, dict):
         for cid, sdata in subscribers.items():
@@ -112,12 +112,12 @@ def get_active_recipients():
     return list(recipients)
 
 
-# --- KEYBOARDS ---
+# --- KEYBOARDS (સંપૂર્ણ UI) ---
 
 def main_menu_keyboard(chat_id):
     markup = InlineKeyboardMarkup()
-    if is_admin(chat_id):
-        markup.add(InlineKeyboardButton("🛠️ Admin Panel", callback_data="menu_admin"))
+    # Admin Panel અને Visitor Access બંને બટન દરેક યુઝરને દેખાશે
+    markup.add(InlineKeyboardButton("🛠️ Admin Panel", callback_data="menu_admin"))
     markup.add(InlineKeyboardButton("👤 Visitor Access", callback_data="menu_visitor"))
     return markup
 
@@ -241,7 +241,7 @@ def handle_text_inputs(message):
             user_states.pop(chat_id, None)
             return
 
-        # 2. Creating Visitor Code
+        # 2. Visitor Code Generation (Phone input)
         if isinstance(state, dict) and state.get("action") == "awaiting_phone":
             duration = state.get("duration")
             phone = text
@@ -252,7 +252,7 @@ def handle_text_inputs(message):
             user_states.pop(chat_id, None)
             return
 
-        # 3. Visitor Code Entry
+        # 3. Visitor Code Input by End User
         if state == "awaiting_visitor_code":
             success, duration = verify_and_register_visitor(chat_id, text)
             if success:
