@@ -279,7 +279,6 @@
         let lastTelegramSentTime = 0;
         let savedMessages = JSON.parse(localStorage.getItem('roadGuardian_telegram_logs')) || [];
 
-        // Tab Switcher
         function switchTab(tabName) {
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.page-content').forEach(page => page.classList.remove('active'));
@@ -296,7 +295,6 @@
             }
         }
 
-        // Setup Webcam
         async function setupWebcam() {
             return new Promise((resolve, reject) => {
                 navigator.mediaDevices.getUserMedia({
@@ -309,7 +307,6 @@
             });
         }
 
-        // Update Firebase
         async function updateFirebase(alertState) {
             if (alertState === lastAlertState) return;
             lastAlertState = alertState;
@@ -325,7 +322,6 @@
             }
         }
 
-        // Send Photo Alert directly to Telegram Bot
         function sendAnimalTelegramAlert(detectedAnimal) {
             photoCanvas.width = 640;
             photoCanvas.height = 480;
@@ -398,7 +394,6 @@
             messageList.innerHTML = html;
         }
 
-        // AI Detection Loop
         const targetAnimals = ['cat', 'dog', 'cow', 'horse', 'sheep', 'elephant', 'bear', 'zebra', 'giraffe'];
 
         async function detectFrame() {
@@ -420,7 +415,6 @@
 
                     updateFirebase(1);
 
-                    // Send max 1 image every 15 seconds
                     if (Date.now() - lastTelegramSentTime > 15000) {
                         sendAnimalTelegramAlert(detectedName);
                         lastTelegramSentTime = Date.now();
