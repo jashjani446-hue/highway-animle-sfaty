@@ -3,14 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>પ્રાણી અવાજ ડિટેક્શન - All Mic Support</title>
+  <title>પ્રાણી અને સિંહ અવાજ સુરક્ષા સિસ્ટમ</title>
   
+  <!-- TensorFlow.js અને Speech Commands લાઈબ્રેરી -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands"></script>
 
   <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; text-align: center; background: #f4f7f6; padding: 20px; }
-    .card { background: white; max-width: 550px; margin: 0 auto; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    body { font-family: 'Segoe UI', Arial, sans-serif; text-align: center; background: #f0f4f8; padding: 20px; }
+    .card { background: white; max-width: 580px; margin: 0 auto; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
     select, button { padding: 10px 15px; font-size: 15px; border-radius: 6px; margin: 8px; border: 1px solid #ccc; width: 90%; }
     button { background: #28a745; color: white; border: none; cursor: pointer; font-weight: bold; width: 45%; }
     button:disabled { background: #ccc; }
@@ -18,6 +19,7 @@
     
     .alert-box { margin-top: 20px; padding: 15px; border-radius: 8px; font-size: 18px; font-weight: bold; display: none; }
     .ill-voice { background: #ffe3e3; color: #d90429; border: 2px solid #d90429; } 
+    .lion-voice { background: #fff3cd; color: #856404; border: 2px solid #ffebaa; }
     .normal-voice { background: #e3f2fd; color: #0d47a1; border: 2px solid #1976d2; } 
     .background-sound { background: #f5f5f5; color: #666; border: 1px solid #ccc; }
   </style>
@@ -25,10 +27,10 @@
 <body>
 
   <div class="card">
-    <h2>🐾 પ્રાણી અવાજ રક્ષણ સિસ્ટમ</h2>
+    <h2>🦁 પ્રાણી અને સિંહ અવાજ રક્ષણ સિસ્ટમ</h2>
     
-    <!-- ૧. માઈક્રોફોન પસંદગી (All Mic Support) -->
-    <label for="micSelect"><strong>🎙️ માઈક્રોફોન પસંદ કરો (All Mics):</strong></label>
+    <!-- ૧. માઈક્રોફોન પસંદગી -->
+    <label for="micSelect"><strong>🎙️ માઈક્રોફોન પસંદ કરો (System / Bluetooth / Mobile):</strong></label>
     <select id="micSelect">
       <option value="">માઈક શોધી રહ્યું છે...</option>
     </select>
@@ -37,10 +39,10 @@
     <label for="detectionMode"><strong>🔍 ડિટેક્શન મોડ પસંદ કરો:</strong></label>
     <select id="detectionMode">
       <option value="ill_only">માત્ર બીમાર/દર્દભર્યો અવાજ (Only Ill Voice)</option>
-      <option value="all_animal">સામાન્ય + બીમાર અવાજ (Normal + Ill Voice - For Judge)</option>
+      <option value="all_animal">સામાન્ય + સિંહ + બીમાર અવાજ (All Voice - For Judge)</option>
     </select><br>
 
-    <button id="startBtn" onclick="startMonitoring()">શરૂ કરો</button>
+    <button id="startBtn" onclick="startMonitoring()">મોનિટરિંગ શરૂ કરો</button>
     <button id="stopBtn" onclick="stopMonitoring()" disabled style="background:#dc3545;">બંધ કરો</button>
 
     <div id="status" class="status">સ્ટેટસ: નિષ્ક્રિય</div>
@@ -51,13 +53,14 @@
     let recognizer;
     let currentStream;
 
+    // અવાજની શ્રેણીઓ (Keywords)
     const illKeywords = ["Scream", "Groan", "Whimper", "Crying", "Yelp", "Howl", "Screaming", "Whip"];
+    const lionKeywords = ["Lion", "Roar", "Growl", "Grunt", "Wild animal"];
     const normalAnimalKeywords = ["Dog", "Bark", "Cat", "Meow", "Moo", "Rooster", "Bird", "Bleat", "Crow"];
 
-    // ૧. કનેક્ટ કરેલા તમામ માઈક્રોફોન શોધીને લિસ્ટમાં ઉમેરવા
+    // ૧. કનેક્ટેડ તમામ માઈક્રોફોન લોડ કરવા
     async function loadAllMics() {
       try {
-        // માઈક ની પરમિશન માંગવી જેથી નામ શો થઈ શકે
         await navigator.mediaDevices.getUserMedia({ audio: true });
         const devices = await navigator.mediaDevices.enumerateDevices();
         const micSelect = document.getElementById('micSelect');
@@ -73,44 +76,39 @@
         audioInputs.forEach((device, index) => {
           const option = document.createElement('option');
           option.value = device.deviceId;
-          
-          // માઈકના નામ પ્રમાણે લેબલ બતાવવું (Bluetooth, Phone Mic, Wired Headset)
           let label = device.label || `Microphone ${index + 1}`;
+          
           if (label.toLowerCase().includes('bluetooth')) {
-            label = "🎧 " + label;
+            label = "🎧 Bluetooth Mic: " + label;
           } else {
-            label = "🎙️ " + label;
+            label = "🎙️ System/Built-in Mic: " + label;
           }
           
           option.text = label;
           micSelect.appendChild(option);
         });
       } catch (err) {
-        document.getElementById('status').innerText = "માઈક્રોફોન પરમિશન નકારી દીધી છે.";
+        document.getElementById('status').innerText = "માઈક્રોફોન પરમિશન આપી નથી!";
       }
     }
 
-    // ૨. પસંદ કરેલા માઈકમાંથી મોનિટરિંગ શરૂ કરવું
+    // ૨. લાઈવ મોનિટરિંગ શરૂ કરવું
     async function startMonitoring() {
       const selectedMicId = document.getElementById('micSelect').value;
-      
-      document.getElementById('status').innerText = "પસંદ કરેલ માઈકમાંથી કનેક્ટ થઈ રહ્યું છે...";
+      document.getElementById('status').innerText = "માઈક અને AI મોડેલ કનેક્ટ થઈ રહ્યું છે...";
 
       try {
-        // પસંદ કરેલા માઈક માંથી ઓડિયો સ્ટ્રીમ લેવી
         currentStream = await navigator.mediaDevices.getUserMedia({
           audio: { deviceId: selectedMicId ? { exact: selectedMicId } : undefined }
         });
 
-        // AI મોડેલ લોડ કરવું
         recognizer = speechCommands.create('BROWSER_FFT');
         await recognizer.ensureModelLoaded();
 
-        document.getElementById('status').innerText = "મોનિટરિંગ ચાલુ છે...";
+        document.getElementById('status').innerText = "સુરક્ષા મોનિટરિંગ ચાલુ છે (અવાજ સાંભળી રહ્યું છે...)";
         document.getElementById('startBtn').disabled = true;
         document.getElementById('stopBtn').disabled = false;
 
-        // લાઈવ અવાજ એનાલિસિસ
         recognizer.listen(result => {
           const scores = result.scores;
           const labels = recognizer.wordLabels();
@@ -128,23 +126,37 @@
           const alertBox = document.getElementById('alertBox');
 
           const isIll = illKeywords.some(word => detectedSound.includes(word));
+          const isLion = lionKeywords.some(word => detectedSound.includes(word));
           const isNormalAnimal = normalAnimalKeywords.some(word => detectedSound.includes(word));
 
+          // ૧. માત્ર બીમાર/દર્દનો અવાજ મોડ
           if (selectedMode === "ill_only") {
             if (isIll && confidence > 60) {
               alertBox.style.display = 'block';
               alertBox.className = "alert-box ill-voice";
               alertBox.innerHTML = `⚠️ દર્દ/બીમાર અવાજ ડિટેક્ટ થયો!<br>Sound: ${detectedSound} (${confidence}%)`;
               playAlarm();
+            } else if (isLion && isIll && confidence > 50) {
+              alertBox.style.display = 'block';
+              alertBox.className = "alert-box ill-voice";
+              alertBox.innerHTML = `🦁⚠️ ઈજાગ્રસ્ત સિંહનો અવાજ!<br>Sound: ${detectedSound} (${confidence}%)`;
+              playAlarm();
             } else {
               alertBox.style.display = 'none';
             }
-          } else if (selectedMode === "all_animal") {
+          } 
+          
+          // ૨. સામાન્ય + સિંહ + બીમાર અવાજ મોડ (For Judge)
+          else if (selectedMode === "all_animal") {
             alertBox.style.display = 'block';
+            
             if (isIll && confidence > 50) {
               alertBox.className = "alert-box ill-voice";
               alertBox.innerHTML = `⚠️ [ILL VOICE] બીમાર/દર્દનો અવાજ<br>Sound: ${detectedSound} (${confidence}%)`;
               playAlarm();
+            } else if (isLion && confidence > 50) {
+              alertBox.className = "alert-box lion-voice";
+              alertBox.innerHTML = `🦁 [LION VOICE] સિંહની ગર્જના/અવાજ<br>Sound: ${detectedSound} (${confidence}%)`;
             } else if (isNormalAnimal && confidence > 50) {
               alertBox.className = "alert-box normal-voice";
               alertBox.innerHTML = `🐶 [NORMAL ANIMAL] સામાન્ય અવાજ<br>Sound: ${detectedSound} (${confidence}%)`;
@@ -165,6 +177,7 @@
       }
     }
 
+    // ૩. ઈમરજન્સી અલાર્મ
     function playAlarm() {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const osc = audioCtx.createOscillator();
@@ -175,6 +188,7 @@
       osc.stop(audioCtx.currentTime + 0.3);
     }
 
+    // ૪. મોનિટરિંગ બંધ કરવું
     function stopMonitoring() {
       if (recognizer) {
         recognizer.stopListening();
@@ -188,7 +202,6 @@
       document.getElementById('alertBox').style.display = 'none';
     }
 
-    // નવું માઈક કનેક્ટ/ડીસકનેક્ટ થાય ત્યારે ઓટો અપડેટ
     navigator.mediaDevices.addEventListener('devicechange', loadAllMics);
     loadAllMics();
   </script>
