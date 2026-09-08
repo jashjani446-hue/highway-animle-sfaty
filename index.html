@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Animal Distress Sound Detector</title>
+<title>એનિબલ ડિસ્ટ્રેસ ડિટેક્ટર (Animal Distress Detector)</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
 
@@ -156,35 +156,35 @@ button:disabled {
 
 <div class="container">
 
-<h1>🐾 Animal Distress Detector</h1>
+<h1>🐾 પ્રાણી તકલીફ ઓળખ સિસ્ટમ</h1>
 
 <div class="subtitle">
-Microphone based automatic sound monitoring
+માઇક્રોફોન આધારિત સ્વચાલિત અવાજ દેખરેખ
 </div>
 
 <div class="card">
 
 <button id="startBtn">
-🎙️ Start Detection
+🎙️ ડિટેક્શન શરૂ કરો
 </button>
 
 <button id="stopBtn" disabled>
-⛔ Stop
+⛔ બંધ કરો
 </button>
 
 <div id="status" class="status loading">
-Model not started
+મોડેલ શરૂ થયું નથી
 </div>
 
 <div id="modelStatus" class="small">
-Loading AI model...
+AI મોડેલ લોડ થઈ રહ્યું છે...
 </div>
 
 </div>
 
 <div class="card">
 
-<h3>🔊 Microphone Level</h3>
+<h3>🔊 માઇક્રોફોન વોલ્યુમ સ્તર</h3>
 
 <div class="meter">
 <div id="volumeBar" class="meterFill"></div>
@@ -198,21 +198,21 @@ Loading AI model...
 
 <div class="card">
 
-<h3>🐾 Animal Sound</h3>
+<h3>🐾 ઓળખાયેલ પ્રાણીનો અવાજ</h3>
 
 <div id="detectedSound">
-Waiting...
+રાહ જોઈ રહ્યું છે...
 </div>
 
 <p class="small">
-AI detected sound category
+AI દ્વારા શોધાયેલ અવાજનો પ્રકાર
 </p>
 
 </div>
 
 <div class="card">
 
-<h3>⚠️ Possible Distress Score</h3>
+<h3>⚠️ સંભવિત તકલીફ (Distress) સ્કોર</h3>
 
 <div class="meter">
 <div id="scoreBar" class="meterFill"></div>
@@ -223,29 +223,29 @@ AI detected sound category
 </div>
 
 <div id="alertBox" class="alertBox">
-🚨 POSSIBLE ANIMAL DISTRESS! 🚨
+🚨 સંભવિત પ્રાણી તકલીફમાં છે! 🚨
 <br>
-Animal distress-like vocalization detected.
+પ્રાણીનો મુશ્કેલી અથવા પીડા દર્શાવતો અવાજ મળી આવ્યો છે.
 </div>
 
 </div>
 
 <div class="card">
 
-<h3>📋 Detection Log</h3>
+<h3>📋 ડિટેક્શન લોગ (Log)</h3>
 
 <div id="log" class="log">
-System starting...
+સિસ્ટમ શરૂ થઈ રહી છે...
 </div>
 
 </div>
 
 <div class="card small">
 
-<b>Important:</b><br>
+<b>મહત્વપૂર્ણ નોંધ:</b><br>
 આ સિસ્ટમ પ્રાણી પર હુમલો થઈ રહ્યો છે તે સીધું ઓળખતી નથી.
-તે animal vocalization અને distress-like sound pattern શોધે છે.
-False alarms થઈ શકે છે.
+તે માત્ર પ્રાણીના અવાજ અને મુશ્કેલી દર્શાવતી પેટર્ન શોધે છે.
+ખોટી ચેતવણીઓ (False alarms) પણ આવી શકે છે.
 
 </div>
 
@@ -282,76 +282,24 @@ const scoreValue = document.getElementById("scoreValue");
 const alertBox = document.getElementById("alertBox");
 const logBox = document.getElementById("log");
 
-
-/* --------------------------------------------------
-   Animal / distress related AudioSet names
--------------------------------------------------- */
-
 const animalWords = [
-    "animal",
-    "wild animals",
-    "dog",
-    "bark",
-    "bow-wow",
-    "howl",
-    "growling",
-    "whimper",
-    "cat",
-    "meow",
-    "purr",
-    "hiss",
-    "roaring cats",
-    "roar",
-    "horse",
-    "neigh",
-    "whinny",
-    "cow",
-    "moo",
-    "sheep",
-    "bleat",
-    "goat",
-    "pig",
-    "oink",
-    "bird",
-    "bird vocalization",
-    "chirp",
-    "frog",
-    "insect",
-    "wolf",
-    "coyote",
-    "lion",
-    "tiger",
-    "elephant",
-    "monkey",
-    "ape"
+    "animal", "wild animals", "dog", "bark", "bow-wow", "howl", 
+    "growling", "whimper", "cat", "meow", "purr", "hiss", 
+    "roaring cats", "roar", "horse", "neigh", "whinny", "cow", 
+    "moo", "sheep", "bleat", "goat", "pig", "oink", "bird", 
+    "bird vocalization", "chirp", "frog", "insect", "wolf", 
+    "coyote", "lion", "tiger", "elephant", "monkey", "ape"
 ];
-
-/* Stronger distress-like classes */
 
 const distressWords = [
-    "whimper",
-    "whining",
-    "crying",
-    "screaming",
-    "yelp",
-    "growling",
-    "howl",
-    "roar",
-    "squeak",
-    "squeal",
-    "animal"
+    "whimper", "whining", "crying", "screaming", "yelp", 
+    "growling", "howl", "roar", "squeak", "squeal", "animal"
 ];
-
-/* --------------------------------------------------
-   Model & Class Map Endpoints (CORS Fixed)
--------------------------------------------------- */
 
 let model = null;
 
-// Kaggle Model JSON (handles CORS properly)
-const MODEL_URL = "https://www.kaggle.com/models/google/yamnet/tfJs/yamnet/1/model.json";
-
-// Raw GitHub Class Map URL
+/* Direct working CORS URL for YAMNet */
+const MODEL_URL = "https://tfhub.dev/google/tfjs-model/yamnet/tfjs/1";
 const CLASS_MAP_URL = "https://raw.githubusercontent.com/tensorflow/models/master/research/audioset/yamnet/yamnet_class_map.csv";
 
 let classNames = [];
@@ -363,61 +311,54 @@ async function loadClassNames() {
         const lines = text.trim().split("\n");
 
         classNames = [];
-
         for (let i = 1; i < lines.length; i++) {
             const parts = lines[i].split(",");
             if (parts.length >= 3) {
                 classNames.push(parts[2].replace(/^"|"$/g, ""));
             }
         }
-
-        console.log("Classes loaded:", classNames.length);
+        console.log("વર્ગો લોડ થયા:", classNames.length);
     } catch (error) {
-        console.error("Failed to load class names:", error);
+        console.error("ક્લાસ નામો લોડ કરવામાં નિષ્ફળ:", error);
         classNames = [];
     }
 }
 
 async function loadModel() {
     try {
-        modelStatus.innerText = "Loading YAMNet AI...";
+        modelStatus.innerText = "AI મોડેલ ડાઉનલોડ થઈ રહ્યું છે...";
 
         await tf.ready();
-
+        
+        // Use CPU or WebGL context safely
         try {
             await tf.setBackend("webgl");
-            await tf.ready();
-        } catch(e) {
-            console.log("WebGL unavailable, falling back to CPU backend");
+        } catch (e) {
+            await tf.setBackend("cpu");
         }
-
-        console.log("TensorFlow backend:", tf.getBackend());
 
         await loadClassNames();
 
-        model = await tf.loadGraphModel(MODEL_URL);
+        // Loading model from TFHub with fallback handling
+        model = await tf.loadGraphModel(MODEL_URL, { fromTFHub: true });
 
-        modelStatus.innerText = "✅ AI model ready";
-        statusEl.innerText = "Ready";
+        modelStatus.innerText = "✅ AI મોડેલ તૈયાર છે";
+        statusEl.innerText = "તૈયાર છે";
         statusEl.className = "status normal";
 
-        addLog("YAMNet AI model loaded.");
+        addLog("YAMNet AI મોડેલ સફળતાપૂર્વક લોડ થયું.");
     } catch(error) {
-        console.error("Model load error:", error);
-        modelStatus.innerText = "❌ Model loading failed";
-        statusEl.innerText = "Model Error";
+        console.error("મોડેલ લોડ એરર:", error);
+        modelStatus.innerText = "❌ મોડેલ લોડ કરવામાં ભૂલ આવી";
+        statusEl.innerText = "મોડેલ એરર";
         statusEl.className = "status warning";
-        addLog("ERROR: " + error.message);
+        addLog("એરર: " + error.message);
     }
 }
 
-/* --------------------------------------------------
-   Microphone
--------------------------------------------------- */
-
 async function startMicrophone() {
     if (!model) {
-        alert("AI model is still loading. Please wait.");
+        alert("AI મોડેલ હજી લોડ થઈ રહ્યું છે. મહેરબાની કરીને રાહ જુઓ.");
         return;
     }
 
@@ -447,16 +388,16 @@ async function startMicrophone() {
         startBtn.disabled = true;
         stopBtn.disabled = false;
 
-        statusEl.innerText = "🎙️ Listening...";
+        statusEl.innerText = "🎙️ અવાજ સાંભળી રહ્યું છે...";
         statusEl.className = "status normal";
 
-        addLog("Microphone started.");
+        addLog("માઇક્રોફોન શરૂ થયું.");
 
         processMicrophone();
     } catch(error) {
-        console.error("Microphone error:", error);
-        alert("Microphone permission required.");
-        addLog("Microphone error: " + error.message);
+        console.error("માઇક્રોફોન એરર:", error);
+        alert("માઇક્રોફોન પરમિશન જરૂરી છે.");
+        addLog("માઇક્રોફોન ભૂલ: " + error.message);
     }
 }
 
@@ -474,10 +415,10 @@ function stopMicrophone() {
     startBtn.disabled = false;
     stopBtn.disabled = true;
 
-    statusEl.innerText = "Stopped";
+    statusEl.innerText = "બંધ છે";
     statusEl.className = "status";
 
-    addLog("Microphone stopped.");
+    addLog("માઇક્રોફોન બંધ કરવામાં આવ્યું.");
 }
 
 function processMicrophone() {
@@ -538,10 +479,6 @@ function resampleTo16k(input, inputRate) {
     return output;
 }
 
-/* --------------------------------------------------
-   AI Analysis
--------------------------------------------------- */
-
 async function analyseAudio() {
     if (!model || !running) return;
 
@@ -583,7 +520,7 @@ async function analyseAudio() {
         }
 
         const topScore = vector[topIndex] || 0;
-        const topName = classNames[topIndex] || "Unknown sound";
+        const topName = classNames[topIndex] || "અજ્ઞાત અવાજ (Unknown)";
 
         let animalScore = 0;
         let distressScore = 0;
@@ -625,22 +562,22 @@ async function analyseAudio() {
             showDistress(percent, topName);
         } else {
             hideDistress();
-            statusEl.innerText = animalDetected ? "🐾 Animal sound detected" : "🎙️ Listening...";
+            statusEl.innerText = animalDetected ? "🐾 પ્રાણીનો અવાજ મળ્યો" : "🎙️ અવાજ સાંભળી રહ્યું છે...";
             statusEl.className = "status normal";
         }
 
     } catch(error) {
-        console.error("AI execution error:", error);
+        console.error("AI એનાલિસિસ એરર:", error);
     } finally {
         tf.engine().endScope();
     }
 }
 
 function showDistress(score, sound) {
-    statusEl.innerText = "🚨 POSSIBLE ANIMAL DISTRESS";
+    statusEl.innerText = "🚨 સંભવિત પ્રાણી મુશ્કેલીમાં છે";
     statusEl.className = "status warning";
     alertBox.style.display = "block";
-    addLog("⚠️ Possible distress: " + sound + " (" + score + "%)");
+    addLog("⚠️ ચેતવણી: " + sound + " (" + score + "%)");
 }
 
 function hideDistress() {
