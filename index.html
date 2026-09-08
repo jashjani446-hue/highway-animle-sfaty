@@ -1,209 +1,1211 @@
 <!DOCTYPE html>
 <html lang="gu">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>પ્રાણી અને સિંહ અવાજ સુરક્ષા સિસ્ટમ</title>
-  
-  <!-- TensorFlow.js અને Speech Commands લાઈબ્રેરી -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands"></script>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
 
-  <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; text-align: center; background: #f0f4f8; padding: 20px; }
-    .card { background: white; max-width: 580px; margin: 0 auto; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-    select, button { padding: 10px 15px; font-size: 15px; border-radius: 6px; margin: 8px; border: 1px solid #ccc; width: 90%; }
-    button { background: #28a745; color: white; border: none; cursor: pointer; font-weight: bold; width: 45%; }
-    button:disabled { background: #ccc; }
-    .status { margin-top: 15px; font-size: 16px; color: #555; }
-    
-    .alert-box { margin-top: 20px; padding: 15px; border-radius: 8px; font-size: 18px; font-weight: bold; display: none; }
-    .ill-voice { background: #ffe3e3; color: #d90429; border: 2px solid #d90429; } 
-    .lion-voice { background: #fff3cd; color: #856404; border: 2px solid #ffebaa; }
-    .normal-voice { background: #e3f2fd; color: #0d47a1; border: 2px solid #1976d2; } 
-    .background-sound { background: #f5f5f5; color: #666; border: 1px solid #ccc; }
-  </style>
+<title>Animal Distress Sound Detector</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #101820;
+    color: white;
+    text-align: center;
+}
+
+.container {
+    max-width: 650px;
+    margin: auto;
+    padding: 20px;
+}
+
+h1 {
+    margin-bottom: 5px;
+}
+
+.subtitle {
+    color: #b8c7d1;
+    margin-bottom: 25px;
+}
+
+.card {
+    background: #1c2933;
+    border-radius: 18px;
+    padding: 20px;
+    margin-bottom: 18px;
+    box-shadow: 0 5px 20px rgba(0,0,0,.25);
+}
+
+button {
+    border: 0;
+    border-radius: 12px;
+    padding: 15px 25px;
+    font-size: 17px;
+    font-weight: bold;
+    cursor: pointer;
+    margin: 5px;
+}
+
+#startBtn {
+    background: #20c997;
+    color: white;
+}
+
+#stopBtn {
+    background: #dc3545;
+    color: white;
+}
+
+button:disabled {
+    opacity: .4;
+}
+
+.status {
+    font-size: 25px;
+    font-weight: bold;
+    margin: 15px 0;
+}
+
+.normal {
+    color: #20c997;
+}
+
+.warning {
+    color: #ff5252;
+}
+
+.loading {
+    color: #ffc107;
+}
+
+.meter {
+    width: 100%;
+    height: 22px;
+    background: #34434e;
+    border-radius: 20px;
+    overflow: hidden;
+    margin: 12px 0;
+}
+
+.meterFill {
+    width: 0%;
+    height: 100%;
+    transition: width .15s;
+}
+
+#volumeBar {
+    background: #20c997;
+}
+
+#scoreBar {
+    background: #ff5252;
+}
+
+.value {
+    font-size: 32px;
+    font-weight: bold;
+}
+
+.small {
+    color: #aebbc4;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+#detectedSound {
+    font-size: 20px;
+    margin-top: 10px;
+}
+
+.log {
+    text-align: left;
+    background: #111a20;
+    border-radius: 10px;
+    padding: 12px;
+    max-height: 180px;
+    overflow-y: auto;
+    font-size: 14px;
+}
+
+.alertBox {
+    display: none;
+    background: #8b0000;
+    padding: 20px;
+    border-radius: 15px;
+    margin-top: 15px;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    50% {
+        opacity: .55;
+    }
+}
+</style>
 </head>
+
 <body>
 
-  <div class="card">
-    <h2>🦁 પ્રાણી અને સિંહ અવાજ રક્ષણ સિસ્ટમ</h2>
-    
-    <!-- ૧. માઈક્રોફોન પસંદગી -->
-    <label for="micSelect"><strong>🎙️ માઈક્રોફોન પસંદ કરો (System / Bluetooth / Mobile):</strong></label>
-    <select id="micSelect">
-      <option value="">માઈક શોધી રહ્યું છે...</option>
-    </select>
+<div class="container">
 
-    <!-- ૨. ડિટેક્શન મોડ -->
-    <label for="detectionMode"><strong>🔍 ડિટેક્શન મોડ પસંદ કરો:</strong></label>
-    <select id="detectionMode">
-      <option value="ill_only">માત્ર બીમાર/દર્દભર્યો અવાજ (Only Ill Voice)</option>
-      <option value="all_animal">સામાન્ય + સિંહ + બીમાર અવાજ (All Voice - For Judge)</option>
-    </select><br>
+<h1>🐾 Animal Distress Detector</h1>
 
-    <button id="startBtn" onclick="startMonitoring()">મોનિટરિંગ શરૂ કરો</button>
-    <button id="stopBtn" onclick="stopMonitoring()" disabled style="background:#dc3545;">બંધ કરો</button>
+<div class="subtitle">
+Microphone based automatic sound monitoring
+</div>
 
-    <div id="status" class="status">સ્ટેટસ: નિષ્ક્રિય</div>
-    <div id="alertBox" class="alert-box"></div>
-  </div>
+<div class="card">
 
-  <script>
-    let recognizer;
-    let currentStream;
+<button id="startBtn">
+🎙️ Start Detection
+</button>
 
-    // અવાજની શ્રેણીઓ (Keywords)
-    const illKeywords = ["Scream", "Groan", "Whimper", "Crying", "Yelp", "Howl", "Screaming", "Whip"];
-    const lionKeywords = ["Lion", "Roar", "Growl", "Grunt", "Wild animal"];
-    const normalAnimalKeywords = ["Dog", "Bark", "Cat", "Meow", "Moo", "Rooster", "Bird", "Bleat", "Crow"];
+<button id="stopBtn" disabled>
+⛔ Stop
+</button>
 
-    // ૧. કનેક્ટેડ તમામ માઈક્રોફોન લોડ કરવા
-    async function loadAllMics() {
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const micSelect = document.getElementById('micSelect');
-        micSelect.innerHTML = '';
+<div id="status" class="status loading">
+Model not started
+</div>
 
-        const audioInputs = devices.filter(device => device.kind === 'audioinput');
+<div id="modelStatus" class="small">
+Loading AI model...
+</div>
 
-        if (audioInputs.length === 0) {
-          micSelect.innerHTML = '<option value="">કોઈ માઈક મળ્યું નથી</option>';
-          return;
+</div>
+
+<div class="card">
+
+<h3>🔊 Microphone Level</h3>
+
+<div class="meter">
+<div id="volumeBar" class="meterFill"></div>
+</div>
+
+<div id="volumeValue" class="value">
+0%
+</div>
+
+</div>
+
+<div class="card">
+
+<h3>🐾 Animal Sound</h3>
+
+<div id="detectedSound">
+Waiting...
+</div>
+
+<p class="small">
+AI detected sound category
+</p>
+
+</div>
+
+<div class="card">
+
+<h3>⚠️ Possible Distress Score</h3>
+
+<div class="meter">
+<div id="scoreBar" class="meterFill"></div>
+</div>
+
+<div id="scoreValue" class="value">
+0%
+</div>
+
+<div id="alertBox" class="alertBox">
+🚨 POSSIBLE ANIMAL DISTRESS! 🚨
+<br>
+Animal distress-like vocalization detected.
+</div>
+
+</div>
+
+<div class="card">
+
+<h3>📋 Detection Log</h3>
+
+<div id="log" class="log">
+System starting...
+</div>
+
+</div>
+
+<div class="card small">
+
+<b>Important:</b><br>
+આ સિસ્ટમ પ્રાણી પર હુમલો થઈ રહ્યો છે તે સીધું ઓળખતી નથી.
+તે animal vocalization અને distress-like sound pattern શોધે છે.
+False alarms થઈ શકે છે.
+
+</div>
+
+</div>
+
+<script>
+
+let audioContext;
+let analyser;
+let microphone;
+let stream;
+
+let running = false;
+
+let audioBuffer = [];
+let sampleRate = 16000;
+
+let lastDetection = 0;
+
+const startBtn = document.getElementById("startBtn");
+const stopBtn = document.getElementById("stopBtn");
+
+const statusEl = document.getElementById("status");
+const modelStatus = document.getElementById("modelStatus");
+
+const volumeBar = document.getElementById("volumeBar");
+const volumeValue = document.getElementById("volumeValue");
+
+const detectedSound = document.getElementById("detectedSound");
+
+const scoreBar = document.getElementById("scoreBar");
+const scoreValue = document.getElementById("scoreValue");
+
+const alertBox = document.getElementById("alertBox");
+const logBox = document.getElementById("log");
+
+
+/* --------------------------------------------------
+   Animal / distress related AudioSet names
+-------------------------------------------------- */
+
+const animalWords = [
+
+    "animal",
+    "wild animals",
+
+    "dog",
+    "bark",
+    "bow-wow",
+    "howl",
+    "growling",
+    "whimper",
+
+    "cat",
+    "meow",
+    "purr",
+    "hiss",
+
+    "roaring cats",
+    "roar",
+
+    "horse",
+    "neigh",
+    "whinny",
+
+    "cow",
+    "moo",
+
+    "sheep",
+    "bleat",
+
+    "goat",
+
+    "pig",
+    "oink",
+
+    "bird",
+    "bird vocalization",
+    "chirp",
+
+    "frog",
+
+    "insect",
+
+    "wolf",
+
+    "coyote",
+
+    "lion",
+    "tiger",
+
+    "elephant",
+
+    "monkey",
+
+    "ape"
+
+];
+
+
+/* Stronger distress-like classes */
+
+const distressWords = [
+
+    "whimper",
+    "whining",
+    "crying",
+    "screaming",
+    "yelp",
+    "growling",
+    "howl",
+    "roar",
+    "squeak",
+    "squeal",
+    "animal"
+];
+
+
+/* --------------------------------------------------
+   Model
+-------------------------------------------------- */
+
+let model = null;
+
+
+/*
+   YAMNet TFJS model
+*/
+
+const MODEL_URL =
+"https://tfhub.dev/google/tfjs-model/yamnet/tfjs/1";
+
+
+/*
+   Load class map
+*/
+
+let classNames = [];
+
+
+/*
+   AudioSet/YAMNet class map.
+   We download it from Google's public storage.
+*/
+
+const CLASS_MAP_URL =
+"https://storage.googleapis.com/tf_model_garden/vision/yamnet/yamnet_class_map.csv";
+
+
+async function loadClassNames() {
+
+    try {
+
+        const response =
+            await fetch(CLASS_MAP_URL);
+
+        const text =
+            await response.text();
+
+        const lines =
+            text.trim().split("\n");
+
+        classNames = [];
+
+        for (let i = 1; i < lines.length; i++) {
+
+            const parts =
+                lines[i].split(",");
+
+            if (parts.length >= 3) {
+
+                classNames.push(
+                    parts[2].replace(/^"|"$/g, "")
+                );
+
+            }
+
         }
 
-        audioInputs.forEach((device, index) => {
-          const option = document.createElement('option');
-          option.value = device.deviceId;
-          let label = device.label || `Microphone ${index + 1}`;
-          
-          if (label.toLowerCase().includes('bluetooth')) {
-            label = "🎧 Bluetooth Mic: " + label;
-          } else {
-            label = "🎙️ System/Built-in Mic: " + label;
-          }
-          
-          option.text = label;
-          micSelect.appendChild(option);
-        });
-      } catch (err) {
-        document.getElementById('status').innerText = "માઈક્રોફોન પરમિશન આપી નથી!";
-      }
-    }
+        console.log(
+            "Classes loaded:",
+            classNames.length
+        );
 
-    // ૨. લાઈવ મોનિટરિંગ શરૂ કરવું
-    async function startMonitoring() {
-      const selectedMicId = document.getElementById('micSelect').value;
-      document.getElementById('status').innerText = "માઈક અને AI મોડેલ કનેક્ટ થઈ રહ્યું છે...";
+    } catch (error) {
 
-      try {
-        currentStream = await navigator.mediaDevices.getUserMedia({
-          audio: { deviceId: selectedMicId ? { exact: selectedMicId } : undefined }
-        });
-
-        recognizer = speechCommands.create('BROWSER_FFT');
-        await recognizer.ensureModelLoaded();
-
-        document.getElementById('status').innerText = "સુરક્ષા મોનિટરિંગ ચાલુ છે (અવાજ સાંભળી રહ્યું છે...)";
-        document.getElementById('startBtn').disabled = true;
-        document.getElementById('stopBtn').disabled = false;
-
-        recognizer.listen(result => {
-          const scores = result.scores;
-          const labels = recognizer.wordLabels();
-          
-          let highestIndex = 0;
-          for (let i = 0; i < scores.length; i++) {
-            if (scores[i] > scores[highestIndex]) {
-              highestIndex = i;
-            }
-          }
-
-          const detectedSound = labels[highestIndex];
-          const confidence = (scores[highestIndex] * 100).toFixed(0);
-          const selectedMode = document.getElementById('detectionMode').value;
-          const alertBox = document.getElementById('alertBox');
-
-          const isIll = illKeywords.some(word => detectedSound.includes(word));
-          const isLion = lionKeywords.some(word => detectedSound.includes(word));
-          const isNormalAnimal = normalAnimalKeywords.some(word => detectedSound.includes(word));
-
-          // ૧. માત્ર બીમાર/દર્દનો અવાજ મોડ
-          if (selectedMode === "ill_only") {
-            if (isIll && confidence > 60) {
-              alertBox.style.display = 'block';
-              alertBox.className = "alert-box ill-voice";
-              alertBox.innerHTML = `⚠️ દર્દ/બીમાર અવાજ ડિટેક્ટ થયો!<br>Sound: ${detectedSound} (${confidence}%)`;
-              playAlarm();
-            } else if (isLion && isIll && confidence > 50) {
-              alertBox.style.display = 'block';
-              alertBox.className = "alert-box ill-voice";
-              alertBox.innerHTML = `🦁⚠️ ઈજાગ્રસ્ત સિંહનો અવાજ!<br>Sound: ${detectedSound} (${confidence}%)`;
-              playAlarm();
-            } else {
-              alertBox.style.display = 'none';
-            }
-          } 
-          
-          // ૨. સામાન્ય + સિંહ + બીમાર અવાજ મોડ (For Judge)
-          else if (selectedMode === "all_animal") {
-            alertBox.style.display = 'block';
-            
-            if (isIll && confidence > 50) {
-              alertBox.className = "alert-box ill-voice";
-              alertBox.innerHTML = `⚠️ [ILL VOICE] બીમાર/દર્દનો અવાજ<br>Sound: ${detectedSound} (${confidence}%)`;
-              playAlarm();
-            } else if (isLion && confidence > 50) {
-              alertBox.className = "alert-box lion-voice";
-              alertBox.innerHTML = `🦁 [LION VOICE] સિંહની ગર્જના/અવાજ<br>Sound: ${detectedSound} (${confidence}%)`;
-            } else if (isNormalAnimal && confidence > 50) {
-              alertBox.className = "alert-box normal-voice";
-              alertBox.innerHTML = `🐶 [NORMAL ANIMAL] સામાન્ય અવાજ<br>Sound: ${detectedSound} (${confidence}%)`;
-            } else {
-              alertBox.className = "alert-box background-sound";
-              alertBox.innerHTML = `🎧 [BACKGROUND] અન્ય અવાજ: ${detectedSound} (${confidence}%)`;
-            }
-          }
-        }, {
-          includeSpectrogram: true,
-          probabilityThreshold: 0.55,
-          overlapFactor: 0.5
-        });
-
-      } catch (error) {
-        document.getElementById('status').innerText = "અવાજ કનેક્ટ કરવામાં ભૂલ આવી!";
         console.error(error);
-      }
+
+        /*
+          Fallback class names.
+          Main detection will still run,
+          but displayed labels may be limited.
+        */
+
+        classNames = [];
+
+    }
+}
+
+
+/*
+   Load YAMNet
+*/
+
+async function loadModel() {
+
+    try {
+
+        modelStatus.innerText =
+            "Loading YAMNet AI...";
+
+        await tf.ready();
+
+        /*
+          Try WebGL first
+        */
+
+        try {
+            await tf.setBackend("webgl");
+            await tf.ready();
+        } catch(e) {
+            console.log("WebGL unavailable");
+        }
+
+        console.log(
+            "TensorFlow backend:",
+            tf.getBackend()
+        );
+
+        await loadClassNames();
+
+        model =
+            await tf.loadGraphModel(
+                MODEL_URL,
+                {
+                    fromTFHub: true
+                }
+            );
+
+        modelStatus.innerText =
+            "✅ AI model ready";
+
+        statusEl.innerText =
+            "Ready";
+
+        statusEl.className =
+            "status normal";
+
+        addLog(
+            "YAMNet AI model loaded."
+        );
+
+    } catch(error) {
+
+        console.error(error);
+
+        modelStatus.innerText =
+            "❌ Model loading failed";
+
+        statusEl.innerText =
+            "Model Error";
+
+        statusEl.className =
+            "status warning";
+
+        addLog(
+            "ERROR: " + error.message
+        );
+
     }
 
-    // ૩. ઈમરજન્સી અલાર્મ
-    function playAlarm() {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-      osc.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.3);
+}
+
+
+/* --------------------------------------------------
+   Microphone
+-------------------------------------------------- */
+
+async function startMicrophone() {
+
+    if (!model) {
+
+        alert(
+            "AI model is still loading. Please wait."
+        );
+
+        return;
+
     }
 
-    // ૪. મોનિટરિંગ બંધ કરવું
-    function stopMonitoring() {
-      if (recognizer) {
-        recognizer.stopListening();
-      }
-      if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
-      }
-      document.getElementById('status').innerText = "સ્ટેટસ: મોનિટરિંગ બંધ છે";
-      document.getElementById('startBtn').disabled = false;
-      document.getElementById('stopBtn').disabled = true;
-      document.getElementById('alertBox').style.display = 'none';
+    try {
+
+        stream =
+            await navigator.mediaDevices
+            .getUserMedia({
+
+                audio: {
+
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false
+
+                }
+
+            });
+
+        audioContext =
+            new (
+                window.AudioContext ||
+                window.webkitAudioContext
+            )();
+
+        microphone =
+            audioContext
+            .createMediaStreamSource(stream);
+
+        analyser =
+            audioContext
+            .createAnalyser();
+
+        analyser.fftSize = 2048;
+
+        microphone.connect(analyser);
+
+        running = true;
+
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+
+        statusEl.innerText =
+            "🎙️ Listening...";
+
+        statusEl.className =
+            "status normal";
+
+        addLog(
+            "Microphone started."
+        );
+
+        processMicrophone();
+
+    } catch(error) {
+
+        console.error(error);
+
+        alert(
+            "Microphone permission required."
+        );
+
+        addLog(
+            "Microphone error: " +
+            error.message
+        );
+
     }
 
-    navigator.mediaDevices.addEventListener('devicechange', loadAllMics);
-    loadAllMics();
-  </script>
+}
+
+
+/* --------------------------------------------------
+   Stop
+-------------------------------------------------- */
+
+function stopMicrophone() {
+
+    running = false;
+
+    if (stream) {
+
+        stream.getTracks().forEach(
+            track => track.stop()
+        );
+
+    }
+
+    if (audioContext) {
+
+        audioContext.close();
+
+    }
+
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+
+    statusEl.innerText =
+        "Stopped";
+
+    statusEl.className =
+        "status";
+
+    addLog(
+        "Microphone stopped."
+    );
+
+}
+
+
+/* --------------------------------------------------
+   Process microphone
+-------------------------------------------------- */
+
+function processMicrophone() {
+
+    if (!running) return;
+
+    const data =
+        new Float32Array(
+            analyser.fftSize
+        );
+
+    analyser.getFloatTimeDomainData(data);
+
+
+    /*
+       Volume / RMS
+    */
+
+    let sum = 0;
+
+    for (let i = 0; i < data.length; i++) {
+
+        sum += data[i] * data[i];
+
+    }
+
+    const rms =
+        Math.sqrt(sum / data.length);
+
+    let volume =
+        Math.min(
+            100,
+            Math.round(rms * 500)
+        );
+
+    volumeBar.style.width =
+        volume + "%";
+
+    volumeValue.innerText =
+        volume + "%";
+
+
+    /*
+       Add audio to buffer.
+    */
+
+    for (let i = 0; i < data.length; i++) {
+
+        audioBuffer.push(data[i]);
+
+    }
+
+
+    /*
+       Keep roughly 1 second.
+    */
+
+    const maxSamples =
+        audioContext.sampleRate;
+
+    if (audioBuffer.length > maxSamples) {
+
+        audioBuffer =
+            audioBuffer.slice(
+                audioBuffer.length -
+                maxSamples
+            );
+
+    }
+
+
+    /*
+       Run AI every ~1.1 sec.
+    */
+
+    if (
+        audioBuffer.length >
+        audioContext.sampleRate * 0.9 &&
+        Date.now() - lastDetection > 900
+    ) {
+
+        lastDetection = Date.now();
+
+        analyseAudio();
+
+    }
+
+
+    requestAnimationFrame(
+        processMicrophone
+    );
+
+}
+
+
+/* --------------------------------------------------
+   Resampling
+-------------------------------------------------- */
+
+function resampleTo16k(
+    input,
+    inputRate
+) {
+
+    if (inputRate === 16000) {
+
+        return new Float32Array(input);
+
+    }
+
+    const ratio =
+        inputRate / 16000;
+
+    const newLength =
+        Math.round(
+            input.length / ratio
+        );
+
+    const output =
+        new Float32Array(newLength);
+
+    for (
+        let i = 0;
+        i < newLength;
+        i++
+    ) {
+
+        const position =
+            i * ratio;
+
+        const index =
+            Math.floor(position);
+
+        const fraction =
+            position - index;
+
+        const a =
+            input[index] || 0;
+
+        const b =
+            input[index + 1] || 0;
+
+        output[i] =
+            a + (b - a) * fraction;
+
+    }
+
+    return output;
+
+}
+
+
+/* --------------------------------------------------
+   AI analysis
+-------------------------------------------------- */
+
+async function analyseAudio() {
+
+    if (!model || !running) return;
+
+    try {
+
+        const source =
+            resampleTo16k(
+                audioBuffer,
+                audioContext.sampleRate
+            );
+
+
+        /*
+           YAMNet expects mono 16kHz waveform.
+        */
+
+        const waveform =
+            tf.tensor1d(source);
+
+
+        const result =
+            model.execute(
+                waveform
+            );
+
+
+        let scores;
+
+
+        /*
+           Some TFJS conversions return
+           an array of tensors.
+        */
+
+        if (Array.isArray(result)) {
+
+            scores = result[0];
+
+        } else {
+
+            scores = result;
+
+        }
+
+
+        const scoreArray =
+            await scores.array();
+
+
+        /*
+           Get last frame / average.
+        */
+
+        let vector;
+
+        if (
+            Array.isArray(scoreArray[0])
+        ) {
+
+            const frames =
+                scoreArray;
+
+            const count =
+                frames.length;
+
+            const classes =
+                frames[0].length;
+
+            vector =
+                new Array(classes)
+                .fill(0);
+
+            for (
+                let f = 0;
+                f < count;
+                f++
+            ) {
+
+                for (
+                    let c = 0;
+                    c < classes;
+                    c++
+                ) {
+
+                    vector[c] +=
+                        frames[f][c];
+
+                }
+
+            }
+
+            for (
+                let c = 0;
+                c < classes;
+                c++
+            ) {
+
+                vector[c] /= count;
+
+            }
+
+        } else {
+
+            vector = scoreArray;
+
+        }
+
+
+        /*
+           Find top sound.
+        */
+
+        let topIndex = 0;
+
+        for (
+            let i = 1;
+            i < vector.length;
+            i++
+        ) {
+
+            if (
+                vector[i] >
+                vector[topIndex]
+            ) {
+
+                topIndex = i;
+
+            }
+
+        }
+
+
+        const topScore =
+            vector[topIndex] || 0;
+
+        const topName =
+            classNames[topIndex] ||
+            "Unknown sound";
+
+
+        /*
+           Find animal-related score.
+        */
+
+        let animalScore = 0;
+        let distressScore = 0;
+
+        let animalDetected = false;
+
+
+        for (
+            let i = 0;
+            i < vector.length;
+            i++
+        ) {
+
+            const name =
+                (
+                    classNames[i] || ""
+                ).toLowerCase();
+
+            const score =
+                vector[i] || 0;
+
+
+            /*
+               Animal category
+            */
+
+            for (
+                const word of animalWords
+            ) {
+
+                if (
+                    name.includes(
+                        word.toLowerCase()
+                    )
+                ) {
+
+                    animalScore =
+                        Math.max(
+                            animalScore,
+                            score
+                        );
+
+                    animalDetected = true;
+
+                    break;
+
+                }
+
+            }
+
+
+            /*
+               Distress-like category
+            */
+
+            for (
+                const word of distressWords
+            ) {
+
+                if (
+                    name.includes(
+                        word.toLowerCase()
+                    )
+                ) {
+
+                    distressScore =
+                        Math.max(
+                            distressScore,
+                            score
+                        );
+
+                    break;
+
+                }
+
+            }
+
+        }
+
+
+        /*
+           Combine animal + distress.
+
+           This is NOT a medical probability.
+           It is only a detection score.
+        */
+
+        let finalScore =
+            Math.max(
+                distressScore,
+                animalScore * 0.65
+            );
+
+
+        /*
+           Strong top animal sound
+        */
+
+        if (
+            animalDetected &&
+            topScore > 0.30
+        ) {
+
+            finalScore =
+                Math.max(
+                    finalScore,
+                    topScore * 0.75
+                );
+
+        }
+
+
+        /*
+           Convert to percentage.
+        */
+
+        let percent =
+            Math.round(
+                Math.min(
+                    1,
+                    finalScore
+                ) * 100
+            );
+
+
+        /*
+           Display
+        */
+
+        detectedSound.innerText =
+            topName +
+            " — " +
+            Math.round(topScore * 100) +
+            "%";
+
+
+        scoreBar.style.width =
+            percent + "%";
+
+        scoreValue.innerText =
+            percent + "%";
+
+
+        /*
+           Alert threshold
+        */
+
+        if (
+            animalDetected &&
+            percent >= 55
+        ) {
+
+            showDistress(percent, topName);
+
+        } else {
+
+            hideDistress();
+
+            statusEl.innerText =
+                animalDetected
+                ? "🐾 Animal sound detected"
+                : "🎙️ Listening...";
+
+            statusEl.className =
+                "status normal";
+
+        }
+
+
+        tf.dispose(waveform);
+        tf.dispose(result);
+
+    } catch(error) {
+
+        console.error(
+            "AI error:",
+            error
+        );
+
+    }
+
+}
+
+
+/* --------------------------------------------------
+   Alert
+-------------------------------------------------- */
+
+function showDistress(
+    score,
+    sound
+) {
+
+    statusEl.innerText =
+        "🚨 POSSIBLE ANIMAL DISTRESS";
+
+    statusEl.className =
+        "status warning";
+
+    alertBox.style.display =
+        "block";
+
+    addLog(
+        "⚠️ Possible distress: " +
+        sound +
+        " (" +
+        score +
+        "%)"
+    );
+
+}
+
+
+function hideDistress() {
+
+    alertBox.style.display =
+        "none";
+
+}
+
+
+/* --------------------------------------------------
+   Log
+-------------------------------------------------- */
+
+function addLog(message) {
+
+    const time =
+        new Date().toLocaleTimeString();
+
+    const line =
+        document.createElement("div");
+
+    line.innerText =
+        "[" + time + "] " +
+        message;
+
+    logBox.prepend(line);
+
+}
+
+
+/* --------------------------------------------------
+   Buttons
+-------------------------------------------------- */
+
+startBtn.onclick =
+    startMicrophone;
+
+stopBtn.onclick =
+    stopMicrophone;
+
+
+/* --------------------------------------------------
+   Start loading AI
+-------------------------------------------------- */
+
+loadModel();
+
+</script>
+
 </body>
 </html>
