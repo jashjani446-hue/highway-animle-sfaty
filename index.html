@@ -2,8 +2,7 @@
 <html lang="gu">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport"
-      content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>Animal Distress Sound Detector</title>
 
@@ -289,68 +288,47 @@ const logBox = document.getElementById("log");
 -------------------------------------------------- */
 
 const animalWords = [
-
     "animal",
     "wild animals",
-
     "dog",
     "bark",
     "bow-wow",
     "howl",
     "growling",
     "whimper",
-
     "cat",
     "meow",
     "purr",
     "hiss",
-
     "roaring cats",
     "roar",
-
     "horse",
     "neigh",
     "whinny",
-
     "cow",
     "moo",
-
     "sheep",
     "bleat",
-
     "goat",
-
     "pig",
     "oink",
-
     "bird",
     "bird vocalization",
     "chirp",
-
     "frog",
-
     "insect",
-
     "wolf",
-
     "coyote",
-
     "lion",
     "tiger",
-
     "elephant",
-
     "monkey",
-
     "ape"
-
 ];
-
 
 /* Stronger distress-like classes */
 
 const distressWords = [
-
     "whimper",
     "whining",
     "crying",
@@ -364,209 +342,102 @@ const distressWords = [
     "animal"
 ];
 
-
 /* --------------------------------------------------
-   Model
+   Model & Class Map Endpoints (CORS Fixed)
 -------------------------------------------------- */
 
 let model = null;
 
+// Kaggle Model JSON (handles CORS properly)
+const MODEL_URL = "https://www.kaggle.com/models/google/yamnet/tfJs/yamnet/1/model.json";
 
-/*
-   YAMNet TFJS model
-*/
-
-const MODEL_URL =
-"https://tfhub.dev/google/tfjs-model/yamnet/tfjs/1";
-
-
-/*
-   Load class map
-*/
+// Raw GitHub Class Map URL
+const CLASS_MAP_URL = "https://raw.githubusercontent.com/tensorflow/models/master/research/audioset/yamnet/yamnet_class_map.csv";
 
 let classNames = [];
 
-
-/*
-   AudioSet/YAMNet class map.
-   We download it from Google's public storage.
-*/
-
-const CLASS_MAP_URL =
-"https://storage.googleapis.com/tf_model_garden/vision/yamnet/yamnet_class_map.csv";
-
-
 async function loadClassNames() {
-
     try {
-
-        const response =
-            await fetch(CLASS_MAP_URL);
-
-        const text =
-            await response.text();
-
-        const lines =
-            text.trim().split("\n");
+        const response = await fetch(CLASS_MAP_URL);
+        const text = await response.text();
+        const lines = text.trim().split("\n");
 
         classNames = [];
 
         for (let i = 1; i < lines.length; i++) {
-
-            const parts =
-                lines[i].split(",");
-
+            const parts = lines[i].split(",");
             if (parts.length >= 3) {
-
-                classNames.push(
-                    parts[2].replace(/^"|"$/g, "")
-                );
-
+                classNames.push(parts[2].replace(/^"|"$/g, ""));
             }
-
         }
 
-        console.log(
-            "Classes loaded:",
-            classNames.length
-        );
-
+        console.log("Classes loaded:", classNames.length);
     } catch (error) {
-
-        console.error(error);
-
-        /*
-          Fallback class names.
-          Main detection will still run,
-          but displayed labels may be limited.
-        */
-
+        console.error("Failed to load class names:", error);
         classNames = [];
-
     }
 }
 
-
-/*
-   Load YAMNet
-*/
-
 async function loadModel() {
-
     try {
-
-        modelStatus.innerText =
-            "Loading YAMNet AI...";
+        modelStatus.innerText = "Loading YAMNet AI...";
 
         await tf.ready();
-
-        /*
-          Try WebGL first
-        */
 
         try {
             await tf.setBackend("webgl");
             await tf.ready();
         } catch(e) {
-            console.log("WebGL unavailable");
+            console.log("WebGL unavailable, falling back to CPU backend");
         }
 
-        console.log(
-            "TensorFlow backend:",
-            tf.getBackend()
-        );
+        console.log("TensorFlow backend:", tf.getBackend());
 
         await loadClassNames();
 
-        model =
-            await tf.loadGraphModel(
-                MODEL_URL,
-                {
-                    fromTFHub: true
-                }
-            );
+        model = await tf.loadGraphModel(MODEL_URL);
 
-        modelStatus.innerText =
-            "✅ AI model ready";
+        modelStatus.innerText = "✅ AI model ready";
+        statusEl.innerText = "Ready";
+        statusEl.className = "status normal";
 
-        statusEl.innerText =
-            "Ready";
-
-        statusEl.className =
-            "status normal";
-
-        addLog(
-            "YAMNet AI model loaded."
-        );
-
+        addLog("YAMNet AI model loaded.");
     } catch(error) {
-
-        console.error(error);
-
-        modelStatus.innerText =
-            "❌ Model loading failed";
-
-        statusEl.innerText =
-            "Model Error";
-
-        statusEl.className =
-            "status warning";
-
-        addLog(
-            "ERROR: " + error.message
-        );
-
+        console.error("Model load error:", error);
+        modelStatus.innerText = "❌ Model loading failed";
+        statusEl.innerText = "Model Error";
+        statusEl.className = "status warning";
+        addLog("ERROR: " + error.message);
     }
-
 }
-
 
 /* --------------------------------------------------
    Microphone
 -------------------------------------------------- */
 
 async function startMicrophone() {
-
     if (!model) {
-
-        alert(
-            "AI model is still loading. Please wait."
-        );
-
+        alert("AI model is still loading. Please wait.");
         return;
-
     }
 
     try {
+        stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false
+            }
+        });
 
-        stream =
-            await navigator.mediaDevices
-            .getUserMedia({
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+        }
 
-                audio: {
-
-                    echoCancellation: false,
-                    noiseSuppression: false,
-                    autoGainControl: false
-
-                }
-
-            });
-
-        audioContext =
-            new (
-                window.AudioContext ||
-                window.webkitAudioContext
-            )();
-
-        microphone =
-            audioContext
-            .createMediaStreamSource(stream);
-
-        analyser =
-            audioContext
-            .createAnalyser();
-
+        microphone = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
         analyser.fftSize = 2048;
 
         microphone.connect(analyser);
@@ -576,632 +447,215 @@ async function startMicrophone() {
         startBtn.disabled = true;
         stopBtn.disabled = false;
 
-        statusEl.innerText =
-            "🎙️ Listening...";
+        statusEl.innerText = "🎙️ Listening...";
+        statusEl.className = "status normal";
 
-        statusEl.className =
-            "status normal";
-
-        addLog(
-            "Microphone started."
-        );
+        addLog("Microphone started.");
 
         processMicrophone();
-
     } catch(error) {
-
-        console.error(error);
-
-        alert(
-            "Microphone permission required."
-        );
-
-        addLog(
-            "Microphone error: " +
-            error.message
-        );
-
+        console.error("Microphone error:", error);
+        alert("Microphone permission required.");
+        addLog("Microphone error: " + error.message);
     }
-
 }
 
-
-/* --------------------------------------------------
-   Stop
--------------------------------------------------- */
-
 function stopMicrophone() {
-
     running = false;
 
     if (stream) {
-
-        stream.getTracks().forEach(
-            track => track.stop()
-        );
-
+        stream.getTracks().forEach(track => track.stop());
     }
 
     if (audioContext) {
-
         audioContext.close();
-
     }
 
     startBtn.disabled = false;
     stopBtn.disabled = true;
 
-    statusEl.innerText =
-        "Stopped";
+    statusEl.innerText = "Stopped";
+    statusEl.className = "status";
 
-    statusEl.className =
-        "status";
-
-    addLog(
-        "Microphone stopped."
-    );
-
+    addLog("Microphone stopped.");
 }
-
-
-/* --------------------------------------------------
-   Process microphone
--------------------------------------------------- */
 
 function processMicrophone() {
-
     if (!running) return;
 
-    const data =
-        new Float32Array(
-            analyser.fftSize
-        );
-
+    const data = new Float32Array(analyser.fftSize);
     analyser.getFloatTimeDomainData(data);
 
-
-    /*
-       Volume / RMS
-    */
-
     let sum = 0;
-
     for (let i = 0; i < data.length; i++) {
-
         sum += data[i] * data[i];
-
     }
 
-    const rms =
-        Math.sqrt(sum / data.length);
+    const rms = Math.sqrt(sum / data.length);
+    let volume = Math.min(100, Math.round(rms * 500));
 
-    let volume =
-        Math.min(
-            100,
-            Math.round(rms * 500)
-        );
-
-    volumeBar.style.width =
-        volume + "%";
-
-    volumeValue.innerText =
-        volume + "%";
-
-
-    /*
-       Add audio to buffer.
-    */
+    volumeBar.style.width = volume + "%";
+    volumeValue.innerText = volume + "%";
 
     for (let i = 0; i < data.length; i++) {
-
         audioBuffer.push(data[i]);
-
     }
 
-
-    /*
-       Keep roughly 1 second.
-    */
-
-    const maxSamples =
-        audioContext.sampleRate;
-
+    const maxSamples = audioContext.sampleRate;
     if (audioBuffer.length > maxSamples) {
-
-        audioBuffer =
-            audioBuffer.slice(
-                audioBuffer.length -
-                maxSamples
-            );
-
+        audioBuffer = audioBuffer.slice(audioBuffer.length - maxSamples);
     }
-
-
-    /*
-       Run AI every ~1.1 sec.
-    */
 
     if (
-        audioBuffer.length >
-        audioContext.sampleRate * 0.9 &&
+        audioBuffer.length >= audioContext.sampleRate * 0.9 &&
         Date.now() - lastDetection > 900
     ) {
-
         lastDetection = Date.now();
-
         analyseAudio();
-
     }
 
-
-    requestAnimationFrame(
-        processMicrophone
-    );
-
+    requestAnimationFrame(processMicrophone);
 }
 
-
-/* --------------------------------------------------
-   Resampling
--------------------------------------------------- */
-
-function resampleTo16k(
-    input,
-    inputRate
-) {
-
+function resampleTo16k(input, inputRate) {
     if (inputRate === 16000) {
-
         return new Float32Array(input);
-
     }
 
-    const ratio =
-        inputRate / 16000;
+    const ratio = inputRate / 16000;
+    const newLength = Math.round(input.length / ratio);
+    const output = new Float32Array(newLength);
 
-    const newLength =
-        Math.round(
-            input.length / ratio
-        );
-
-    const output =
-        new Float32Array(newLength);
-
-    for (
-        let i = 0;
-        i < newLength;
-        i++
-    ) {
-
-        const position =
-            i * ratio;
-
-        const index =
-            Math.floor(position);
-
-        const fraction =
-            position - index;
-
-        const a =
-            input[index] || 0;
-
-        const b =
-            input[index + 1] || 0;
-
-        output[i] =
-            a + (b - a) * fraction;
-
+    for (let i = 0; i < newLength; i++) {
+        const position = i * ratio;
+        const index = Math.floor(position);
+        const fraction = position - index;
+        const a = input[index] || 0;
+        const b = input[index + 1] || 0;
+        output[i] = a + (b - a) * fraction;
     }
 
     return output;
-
 }
 
-
 /* --------------------------------------------------
-   AI analysis
+   AI Analysis
 -------------------------------------------------- */
 
 async function analyseAudio() {
-
     if (!model || !running) return;
 
+    tf.engine().startScope();
+
     try {
+        const source = resampleTo16k(audioBuffer, audioContext.sampleRate);
+        const waveform = tf.tensor1d(source);
+        const result = model.execute(waveform);
 
-        const source =
-            resampleTo16k(
-                audioBuffer,
-                audioContext.sampleRate
-            );
-
-
-        /*
-           YAMNet expects mono 16kHz waveform.
-        */
-
-        const waveform =
-            tf.tensor1d(source);
-
-
-        const result =
-            model.execute(
-                waveform
-            );
-
-
-        let scores;
-
-
-        /*
-           Some TFJS conversions return
-           an array of tensors.
-        */
-
-        if (Array.isArray(result)) {
-
-            scores = result[0];
-
-        } else {
-
-            scores = result;
-
-        }
-
-
-        const scoreArray =
-            await scores.array();
-
-
-        /*
-           Get last frame / average.
-        */
+        let scores = Array.isArray(result) ? result[0] : result;
+        const scoreArray = await scores.array();
 
         let vector;
+        if (Array.isArray(scoreArray[0])) {
+            const frames = scoreArray;
+            const count = frames.length;
+            const classes = frames[0].length;
+            vector = new Array(classes).fill(0);
 
-        if (
-            Array.isArray(scoreArray[0])
-        ) {
-
-            const frames =
-                scoreArray;
-
-            const count =
-                frames.length;
-
-            const classes =
-                frames[0].length;
-
-            vector =
-                new Array(classes)
-                .fill(0);
-
-            for (
-                let f = 0;
-                f < count;
-                f++
-            ) {
-
-                for (
-                    let c = 0;
-                    c < classes;
-                    c++
-                ) {
-
-                    vector[c] +=
-                        frames[f][c];
-
+            for (let f = 0; f < count; f++) {
+                for (let c = 0; c < classes; c++) {
+                    vector[c] += frames[f][c];
                 }
-
             }
 
-            for (
-                let c = 0;
-                c < classes;
-                c++
-            ) {
-
+            for (let c = 0; c < classes; c++) {
                 vector[c] /= count;
-
             }
-
         } else {
-
             vector = scoreArray;
-
         }
-
-
-        /*
-           Find top sound.
-        */
 
         let topIndex = 0;
-
-        for (
-            let i = 1;
-            i < vector.length;
-            i++
-        ) {
-
-            if (
-                vector[i] >
-                vector[topIndex]
-            ) {
-
+        for (let i = 1; i < vector.length; i++) {
+            if (vector[i] > vector[topIndex]) {
                 topIndex = i;
-
             }
-
         }
 
-
-        const topScore =
-            vector[topIndex] || 0;
-
-        const topName =
-            classNames[topIndex] ||
-            "Unknown sound";
-
-
-        /*
-           Find animal-related score.
-        */
+        const topScore = vector[topIndex] || 0;
+        const topName = classNames[topIndex] || "Unknown sound";
 
         let animalScore = 0;
         let distressScore = 0;
-
         let animalDetected = false;
 
+        for (let i = 0; i < vector.length; i++) {
+            const name = (classNames[i] || "").toLowerCase();
+            const score = vector[i] || 0;
 
-        for (
-            let i = 0;
-            i < vector.length;
-            i++
-        ) {
-
-            const name =
-                (
-                    classNames[i] || ""
-                ).toLowerCase();
-
-            const score =
-                vector[i] || 0;
-
-
-            /*
-               Animal category
-            */
-
-            for (
-                const word of animalWords
-            ) {
-
-                if (
-                    name.includes(
-                        word.toLowerCase()
-                    )
-                ) {
-
-                    animalScore =
-                        Math.max(
-                            animalScore,
-                            score
-                        );
-
+            for (const word of animalWords) {
+                if (name.includes(word.toLowerCase())) {
+                    animalScore = Math.max(animalScore, score);
                     animalDetected = true;
-
                     break;
-
                 }
-
             }
 
-
-            /*
-               Distress-like category
-            */
-
-            for (
-                const word of distressWords
-            ) {
-
-                if (
-                    name.includes(
-                        word.toLowerCase()
-                    )
-                ) {
-
-                    distressScore =
-                        Math.max(
-                            distressScore,
-                            score
-                        );
-
+            for (const word of distressWords) {
+                if (name.includes(word.toLowerCase())) {
+                    distressScore = Math.max(distressScore, score);
                     break;
-
                 }
-
             }
-
         }
 
+        let finalScore = Math.max(distressScore, animalScore * 0.65);
 
-        /*
-           Combine animal + distress.
-
-           This is NOT a medical probability.
-           It is only a detection score.
-        */
-
-        let finalScore =
-            Math.max(
-                distressScore,
-                animalScore * 0.65
-            );
-
-
-        /*
-           Strong top animal sound
-        */
-
-        if (
-            animalDetected &&
-            topScore > 0.30
-        ) {
-
-            finalScore =
-                Math.max(
-                    finalScore,
-                    topScore * 0.75
-                );
-
+        if (animalDetected && topScore > 0.30) {
+            finalScore = Math.max(finalScore, topScore * 0.75);
         }
 
+        let percent = Math.round(Math.min(1, finalScore) * 100);
 
-        /*
-           Convert to percentage.
-        */
+        detectedSound.innerText = topName + " — " + Math.round(topScore * 100) + "%";
+        scoreBar.style.width = percent + "%";
+        scoreValue.innerText = percent + "%";
 
-        let percent =
-            Math.round(
-                Math.min(
-                    1,
-                    finalScore
-                ) * 100
-            );
-
-
-        /*
-           Display
-        */
-
-        detectedSound.innerText =
-            topName +
-            " — " +
-            Math.round(topScore * 100) +
-            "%";
-
-
-        scoreBar.style.width =
-            percent + "%";
-
-        scoreValue.innerText =
-            percent + "%";
-
-
-        /*
-           Alert threshold
-        */
-
-        if (
-            animalDetected &&
-            percent >= 55
-        ) {
-
+        if (animalDetected && percent >= 55) {
             showDistress(percent, topName);
-
         } else {
-
             hideDistress();
-
-            statusEl.innerText =
-                animalDetected
-                ? "🐾 Animal sound detected"
-                : "🎙️ Listening...";
-
-            statusEl.className =
-                "status normal";
-
+            statusEl.innerText = animalDetected ? "🐾 Animal sound detected" : "🎙️ Listening...";
+            statusEl.className = "status normal";
         }
-
-
-        tf.dispose(waveform);
-        tf.dispose(result);
 
     } catch(error) {
-
-        console.error(
-            "AI error:",
-            error
-        );
-
+        console.error("AI execution error:", error);
+    } finally {
+        tf.engine().endScope();
     }
-
 }
 
-
-/* --------------------------------------------------
-   Alert
--------------------------------------------------- */
-
-function showDistress(
-    score,
-    sound
-) {
-
-    statusEl.innerText =
-        "🚨 POSSIBLE ANIMAL DISTRESS";
-
-    statusEl.className =
-        "status warning";
-
-    alertBox.style.display =
-        "block";
-
-    addLog(
-        "⚠️ Possible distress: " +
-        sound +
-        " (" +
-        score +
-        "%)"
-    );
-
+function showDistress(score, sound) {
+    statusEl.innerText = "🚨 POSSIBLE ANIMAL DISTRESS";
+    statusEl.className = "status warning";
+    alertBox.style.display = "block";
+    addLog("⚠️ Possible distress: " + sound + " (" + score + "%)");
 }
-
 
 function hideDistress() {
-
-    alertBox.style.display =
-        "none";
-
+    alertBox.style.display = "none";
 }
-
-
-/* --------------------------------------------------
-   Log
--------------------------------------------------- */
 
 function addLog(message) {
-
-    const time =
-        new Date().toLocaleTimeString();
-
-    const line =
-        document.createElement("div");
-
-    line.innerText =
-        "[" + time + "] " +
-        message;
-
+    const time = new Date().toLocaleTimeString();
+    const line = document.createElement("div");
+    line.innerText = "[" + time + "] " + message;
     logBox.prepend(line);
-
 }
 
-
-/* --------------------------------------------------
-   Buttons
--------------------------------------------------- */
-
-startBtn.onclick =
-    startMicrophone;
-
-stopBtn.onclick =
-    stopMicrophone;
-
-
-/* --------------------------------------------------
-   Start loading AI
--------------------------------------------------- */
+startBtn.onclick = startMicrophone;
+stopBtn.onclick = stopMicrophone;
 
 loadModel();
 
