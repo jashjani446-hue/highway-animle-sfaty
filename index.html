@@ -37,7 +37,7 @@
       .delete-btn { background: #dc3545; color: #fff; border: none; padding: 4px 8px; font-size: 11px; border-radius: 4px; cursor: pointer; }  
 
       .mic-btn { background-color: #ff4757; color: white; border: none; padding: 12px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%; margin-top: 15px; }  
-      .select-box { width: 100%; padding: 10px; margin-top: 10px; border-radius: 6px; background: #282828; color: #00e676; border: 1px solid #00e676; font-size: 14px; }
+      .select-box { width: 100%; padding: 10px; margin-top: 10px; border-radius: 6px; background: #282828; color: #00e676; border: 1px solid #00e676; font-size: 14px; }  
     </style>  
   </head>  
   <body>  
@@ -48,7 +48,7 @@
 
     <!-- TAB 1: Live Surveillance, Camera & Mic -->  
     <div id="monitoring" class="tab-content active">  
-      <h2>ગીર જંગલ સર્વેલન્સ (AI આધારિત)</h2>  
+      <h2>ગીર જંગલ સર્વેલન્સ (Real-time Audio)</h2>  
       <div class="card">  
         <div id="forestStatus" class="status-box safe">સિસ્ટમ શરૂ થઈ રહી છે...</div>  
 
@@ -56,15 +56,15 @@
           <video id="webcam" autoplay playsinline muted></video>  
         </div>  
 
-        <!-- Mic Selection Dropdown -->
-        <label style="display:block; margin-top:15px; text-align:left; font-size:13px; color:#aaa;">🎙️ માઇક્રોફોન પસંદ કરો:</label>
-        <select id="micSelect" class="select-box" onchange="changeAudioInput()">
-          <option value="">માઇક શોધી રહ્યા છીએ...</option>
-        </select>
+        <!-- Mic Selection Dropdown -->  
+        <label style="display:block; margin-top:15px; text-align:left; font-size:13px; color:#aaa;">🎙️ માઇક્રોફોન પસંદ કરો:</label>  
+        <select id="micSelect" class="select-box" onchange="changeAudioInput()">  
+          <option value="">માઇક શોધી રહ્યા છીએ...</option>  
+        </select>  
 
         <!-- Mic Control -->  
-        <button id="recordBtn" class="mic-btn" onclick="toggleAIListening()">🎤 AI અવાજ મોનિટરિંગ શરૂ કરો</button>  
-        <div id="aiResult" style="margin-top:10px; font-size:14px; color:#aaa;">AI મોડેલ સ્ટેટસ: પ્રક્રિયામાં...</div>  
+        <button id="recordBtn" class="mic-btn" onclick="toggleRealtimeAudio()">🎤 Real-Time અવાજ મોનિટરિંગ શરૂ કરો</button>  
+        <div id="aiResult" style="margin-top:10px; font-size:14px; color:#aaa;">સિસ્ટમ સ્ટેટસ: બંધ છે</div>  
       </div>  
     </div>  
 
@@ -81,10 +81,6 @@
 
     <!-- EmailJS SDK -->  
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>  
-    
-    <!-- TensorFlow.js and YAMNet Audio Classifier SDKs -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.5.4/dist/speech-commands.min.js"></script>
 
     <!-- Firebase SDK (v10.7.1) -->  
     <script type="module">  
@@ -113,13 +109,17 @@
       const smsLogContainer = document.getElementById('smsLog');  
       const video = document.getElementById('webcam');  
       const photoCanvas = document.getElementById('photoCanvas');  
-      const micSelect = document.getElementById('micSelect');
+      const micSelect = document.getElementById('micSelect');  
 
       let lastKnownStatus = -1;  
       let lastEmailSentTime = 0;  
       let smsList = JSON.parse(localStorage.getItem('saved_sms_logs')) || [];  
-      let isAiListening = false;
-      let audioRecognizer = null;
+      
+      // Real-time Audio Context Variables
+      let audioCtx = null;
+      let analyser = null;
+      let micStream = null;
+      let isMonitoring = false;
       let selectedDeviceId = null;
 
       window.switchTab = function(tabId) {  
@@ -130,48 +130,44 @@
         if(tabId === 'messages') renderSMSLogs();  
       };  
 
-      // માઇક્રોફોનની યાદી ડ્રોપડાઉનમાં મેળવો
-      async function populateAudioDevices() {
-        try {
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          const audioInputs = devices.filter(device => device.kind === 'audioinput');
-          micSelect.innerHTML = '';
-          audioInputs.forEach((device, index) => {
-            const option = document.createElement('option');
-            option.value = device.deviceId;
-            option.text = device.label || `માઇક્રોફોન ${index + 1}`;
-            micSelect.appendChild(option);
-          });
-          if (audioInputs.length > 0) {
-            selectedDeviceId = audioInputs[0].deviceId;
-          }
-        } catch (e) {
-          console.error("Mic enumeration error:", e);
-        }
-      }
+      async function populateAudioDevices() {  
+        try {  
+          const devices = await navigator.mediaDevices.enumerateDevices();  
+          const audioInputs = devices.filter(device => device.kind === 'audioinput');  
+          micSelect.innerHTML = '';  
+          audioInputs.forEach((device, index) => {  
+            const option = document.createElement('option');  
+            option.value = device.deviceId;  
+            option.text = device.label || `માઇક્રોફોન ${index + 1}`;  
+            micSelect.appendChild(option);  
+          });  
+          if (audioInputs.length > 0 && !selectedDeviceId) {  
+            selectedDeviceId = audioInputs[0].deviceId;  
+          }  
+        } catch (e) {  
+          console.error("Mic list error:", e);  
+        }  
+      }  
 
-      window.changeAudioInput = function() {
-        selectedDeviceId = micSelect.value;
-        if (isAiListening) {
-          toggleAIListening(); // રિસ્ટાર્ટ માઇક
-          toggleAIListening();
-        }
-      };
+      window.changeAudioInput = function() {  
+        selectedDeviceId = micSelect.value;  
+        setupMediaDevices();  
+      };  
 
       async function setupMediaDevices() {  
         try {  
-          const constraints = {
-            video: { facingMode: "environment" },
-            audio: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true
-          };
-          const stream = await navigator.mediaDevices.getUserMedia(constraints);  
-          video.srcObject = stream;  
-          await populateAudioDevices();
+          const constraints = {  
+            video: { facingMode: "environment" },  
+            audio: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true  
+          };  
+          micStream = await navigator.mediaDevices.getUserMedia(constraints);  
+          video.srcObject = micStream;  
+          await populateAudioDevices();  
         } catch (e) {  
           try {  
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });  
-            video.srcObject = stream;  
-            await populateAudioDevices();
+            micStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });  
+            video.srcObject = micStream;  
+            await populateAudioDevices();  
           } catch (err) {  
             forestBox.innerHTML = "⚠️ કેમેરા/માઇક પરમિશન રદ કરવામાં આવી છે";  
           }  
@@ -228,87 +224,96 @@
         }, 'image/jpeg', 0.7);  
       }  
 
-      async function setupAIAudioModel() {
-        const resultDiv = document.getElementById("aiResult");
-        try {
-          resultDiv.innerText = "⏳ AI ઓડિયો મોડેલ લોડ થઈ રહ્યું છે...";
-          audioRecognizer = speechCommands.create("BROWSER_FFT");
-          await audioRecognizer.ensureModelLoaded();
-          
-          resultDiv.innerText = "✅ AI મોડેલ તૈયાર છે!";
-          resultDiv.style.color = "#00e676";
-        } catch (e) {
-          resultDiv.innerText = "❌ AI મોડેલ લોડ કરવામાં ભૂલ થઈ.";
-          resultDiv.style.color = "#ff5252";
-        }
-      }
-
-      window.toggleAIListening = async function() {
+      // Real-Time Processing Loop
+      window.toggleRealtimeAudio = function() {
         const resultDiv = document.getElementById("aiResult");
         const btn = document.getElementById("recordBtn");
 
-        if (!audioRecognizer) {
-          await setupAIAudioModel();
-        }
+        if (!isMonitoring) {
+          if (!micStream) {
+            alert("માઇક્રોફોન ચાલુ નથી!");
+            return;
+          }
 
-        if (!isAiListening) {
-          isAiListening = true;
-          btn.innerText = "🛑 AI ઓડિયો મોનિટરિંગ બંધ કરો";
-          resultDiv.innerText = "🎧 અવાજ ચેક થઈ રહ્યો છે...";
-          resultDiv.style.color = "#ffb142";
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          audioCtx = new AudioContext();
+          analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 512;
 
-          audioRecognizer.listen(result => {
-            const scores = result.scores;
-            
-            // મોબાઈલ સ્પીકરના રેકોર્ડ કરેલા અવાજો પકડવા માટે સેન્સિટિવિટી વધારે રાખેલ છે
-            let audioVolume = scores.reduce((a, b) => a + b, 0) / scores.length;
+          const source = audioCtx.createMediaStreamSource(micStream);
+          source.connect(analyser);
 
-            // જો અવાજ ખૂબ જ ઓછો હોય (શાંત વાતાવરણ)
-            if (audioVolume < 0.05) {
-              resultDiv.innerText = "🟢 સામાન્ય શાંત અવાજ (Normal Voice / Silence)";
-              resultDiv.style.color = "#00e676";
-              return;
-            }
+          isMonitoring = true;
+          btn.innerText = "🛑 Real-Time મોનિટરિંગ બંધ કરો";
+          resultDiv.innerText = "🎧 Real-Time અવાજ ચેક થઈ રહ્યો છે...";
+          resultDiv.style.color = "#00e676";
 
-            // મોબાઈલ સ્પીકરના રેકોર્ડિંગ અથવા બંદૂકના અવાજ માટે લિમિટ 0.15 કરી દીધી છે (ઘટાડેલી ટકાવારી)
-            if (audioVolume >= 0.15) {
-              resultDiv.innerText = "🚨 બંદૂકના અવાજની શક્યતા (GUNSHOT DETECTED)!";
-              resultDiv.style.color = "#ff5252";
-
-              const now = Date.now();
-              if (now - lastEmailSentTime > 12000) {
-                forestBox.innerHTML = "⚠️ ચેતવણી: બંદૂકનો અવાજ શોધી કાઢ્યો!";
-                forestBox.className = "status-box alert";
-
-                addSmsLog("ALERT: રેકોર્ડિંગ/માઇક દ્વારા બંદૂકનો અવાજ ડિટેક્ટ થયો!", true);
-                sendGmailAlert("GUNSHOT DETECTED VIA RECORDED AUDIO");
-                sendTelegramAlert("GUNSHOT DETECTED VIA RECORDED AUDIO");
-
-                lastEmailSentTime = now;
-
-                setTimeout(() => {
-                  forestBox.innerHTML = "સુરક્ષિત: કોઈ ખતરો નથી";
-                  forestBox.className = "status-box safe";
-                }, 8000);
-              }
-            } else {
-              resultDiv.innerText = "🗣️ સામાન્ય અવાજ (Normal Voice)";
-              resultDiv.style.color = "#00e676";
-            }
-          }, {
-            includeSpectrogram: true,
-            probabilityThreshold: 0.15, // પર્સેન્ટેજ ડાઉન (Low Threshold for Mobile Speakers)
-            overlapFactor: 0.5
-          });
-
+          processAudioStream();
         } else {
-          isAiListening = false;
-          audioRecognizer.stopListening();
-          btn.innerText = "🎤 AI અવાજ મોનિટરિંગ શરૂ કરો";
+          isMonitoring = false;
+          if (audioCtx) audioCtx.close();
+          btn.innerText = "🎤 Real-Time અવાજ મોનિટરિંગ શરૂ કરો";
           resultDiv.innerText = "⏸️ મોનિટરિંગ બંધ છે";
           resultDiv.style.color = "#aaa";
         }
       };
+
+      function processAudioStream() {
+        if (!isMonitoring) return;
+
+        const bufferLength = analyser.frequencyBinCount;
+        const timeData = new Uint8Array(bufferLength);
+        const freqData = new Uint8Array(bufferLength);
+
+        analyser.getByteTimeDomainData(timeData);
+        analyser.getByteFrequencyData(freqData);
+
+        // Calculate Amplitude Spike (Volume Instant Peak)
+        let peakVolume = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          let val = Math.abs(timeData[i] - 128);
+          if (val > peakVolume) peakVolume = val;
+        }
+
+        // Calculate High Frequency Acoustic Impulse (Mobile Speaker Sound Response)
+        let highFreqEnergy = 0;
+        for (let i = Math.floor(bufferLength * 0.4); i < bufferLength; i++) {
+          highFreqEnergy += freqData[i];
+        }
+
+        const resultDiv = document.getElementById("aiResult");
+
+        // બીજા મોબાઇલના સ્પીકરમાંથી આવતા રેકોર્ડ કરેલા બંદૂકના અવાજ માટે
+        if (peakVolume > 40 && highFreqEnergy > 1200) {
+          resultDiv.innerText = "🚨 બંદૂકનો અવાજ ડિટેક્ટ થયો (GUNSHOT DETECTED)!";
+          resultDiv.style.color = "#ff5252";
+
+          const now = Date.now();
+          if (now - lastEmailSentTime > 12000) {
+            forestBox.innerHTML = "⚠️ ચેતવણી: બંદૂકનો અવાજ શોધી કાઢ્યો!";
+            forestBox.className = "status-box alert";
+
+            addSmsLog("ALERT: માઇક દ્વારા બંદૂકનો અવાજ ડિટેક્ટ થયો!", true);
+            sendGmailAlert("GUNSHOT DETECTED VIA REALTIME MIC");
+            sendTelegramAlert("GUNSHOT DETECTED VIA REALTIME MIC");
+
+            lastEmailSentTime = now;
+
+            setTimeout(() => {
+              forestBox.innerHTML = "સુરક્ષિત: કોઈ ખતરો નથી";
+              forestBox.className = "status-box safe";
+            }, 8000);
+          }
+        } else if (peakVolume > 8) {
+          resultDiv.innerText = "🟢 સામાન્ય અવાજ (Normal Voice)";
+          resultDiv.style.color = "#00e676";
+        } else {
+          resultDiv.innerText = "🎧 શાંત વાતાવરણ (Monitoring...)";
+          resultDiv.style.color = "#00e676";
+        }
+
+        requestAnimationFrame(processAudioStream);
+      }
 
       function renderSMSLogs() {  
         if (smsList.length === 0) {  
@@ -383,7 +388,6 @@
 
       async function init() {  
         await setupMediaDevices();  
-        await setupAIAudioModel();
         forestBox.innerHTML = "સુરક્ષિત: કોઈ ખતરો નથી";  
         listenToFirebase();  
       }  
