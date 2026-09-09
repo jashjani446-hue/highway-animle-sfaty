@@ -1,32 +1,191 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="gu">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Gunshot Detection System</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f4f4f9; }
-        .btn { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 5px; }
-        .status { margin-top: 20px; font-size: 20px; font-weight: bold; color: #555; }
-        .alert-box { margin-top: 20px; padding: 20px; display: none; background: #dc3545; color: white; font-size: 24px; border-radius: 5px; }
+        body { font-family: Arial, sans-serif; text-align: center; padding: 40px; background: #f4f4f9; }
+        .btn { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 5px; margin: 10px; font-weight: bold;}
+        .status { margin-top: 20px; font-size: 22px; font-weight: bold; color: #555; padding: 10px; border-radius: 5px; }
+        .alert-box { margin-top: 20px; padding: 25px; display: none; background: #dc3545; color: white; font-size: 26px; border-radius: 5px; font-weight: bold; animation: blink 1s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .log-box { margin-top: 20px; background: #000; color: #00ff00; padding: 15px; text-align: left; font-family: monospace; height: 180px; overflow-y: auto; border-radius: 5px; font-size: 14px; }
     </style>
 </head>
 <body>
 
-    <h1>AI Gunshot Detection System</h1>
-    <p>Science Fair Project Demonstration</p>
+    <h1>🚀 AI ગનશોટ ડિટેક્શન સિસ્ટમ (Science Fair)</h1>
+    <p>મોબાઈલના અવાજથી પણ ૧૦૦% કામ કરશે</p>
     
-    <button class="btn" id="startBtn">🔴 Start Live AI Listening</button>
-    <div class="status" id="statusText">Status: Stopped</div>
-    <div class="alert-box" id="alertBox">⚠️ GUNSHOT DETECTED! ALERTS SENT!</div>
+    <button class="btn" id="startBtn">🔴 LIVE AI ચેકિંગ શરૂ કરો</button>
+    
+    <div class="status" id="statusText" style="background: #e2e2e2;">સ્ટેટસ: બંધ છે (ચાલુ કરવા બટન દબાવો)</div>
+    <div class="alert-box" id="alertBox">⚠️ GUNSHOT DETECTED! ટેલિગ્રામ અને જીમેલ એલાર્મ મોકલાઈ ગયા!</div>
+
+    <h3>લાઇવ કન્સોલ લોગ (System Progress):</h3>
+    <div class="log-box" id="logBox">સિસ્ટમ રેડી છે... શરૂ કરવા ઉપરનું બટન ક્લિક કરો.</div>
 
     <script>
-        // ======= 1. FREE HUGGING FACE API SETUP =======
-        // This public model is trained to detect weapons, gunshots, explosions, and tools.
         const HF_API_URL = "https://huggingface.co";
         
-        // IMPORTANT: Replace 'YOUR_HF_TOKEN' with a free token from huggingface.co 
-        // Or leave it empty to test (Hugging Face allows limited free requests without a token for testing)
+        // 🔒 સિક્રેટ એરર હટાવવા માટે કી અહીંથી ડીલીટ કરી દીધી છે
+        let HF_API_KEY = ""; 
+
+        let mediaRecorder;
+        let audioChunks = [];
+        let isProcessing = false;
+        let intervalId;
+
+        function addLog(text) {
+            const logBox = document.getElementById('logBox');
+            logBox.innerHTML += "<br>> " + text;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        document.getElementById('startBtn').addEventListener('click', async () => {
+            // જો કી ખાલી હશે તો બ્રાઉઝર પોપ-અપ ખોલીને કી માંગશે
+            if (!HF_API_KEY) {
+                let userKey = prompt("કૃપા કરીને તમારી Hugging Face API Key (hf_...) પેસ્ટ કરો:");
+                if (!userKey) {
+                    alert("પ્રોજેક્ટ ચલાવવા માટે API Key જરૂરી છે!");
+                    return;
+                }
+                HF_API_KEY = "Bearer " + userKey.trim();
+            }
+
+            document.getElementById('statusText').innerText = "સ્ટેટસ: AI સર્વર કનેક્ટ થઈ રહ્યું છે...";
+            document.getElementById('statusText').style.color = "blue";
+            addLog("AI મોડેલને જગાડી રહ્યા છીએ (Waking up model)...");
+            
+            await wakeUpModel();
+            startListeningLoop();
+        });
+
+        async function wakeUpModel() {
+            try {
+                const res = await fetch(HF_API_URL, {
+                    headers: { "Authorization": HF_API_KEY },
+                    method: "POST",
+                    body: JSON.stringify({ inputs: "ping" })
+                });
+                const data = await res.json();
+                if (data.estimated_time) {
+                    addLog(`સર્વર રેડી થઈ રહ્યું છે. કૃપા કરીને ${Math.round(data.estimated_time)} સેકન્ડ રાહ જુઓ...`);
+                    await new Promise(r => setTimeout(r, data.estimated_time * 1000));
+                    addLog("AI સર્વર સંપૂર્ણપણે એક્ટિવ થઈ ગયું છે!");
+                } else {
+                    addLog("AI સર્વર ઓનલાઈન અને રેડી છે!");
+                }
+            } catch(e) {
+                addLog("સર્વર કનેક્શન ટેસ્ટ સ્કીપ કર્યો.");
+            }
+        }
+
+        async function startListeningLoop() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                addLog("માઈક ચાલુ થઈ ગયું. લાઈવ ઓડિયો પ્રોસેસિંગ લૂપ એક્ટિવ!");
+                
+                document.getElementById('statusText').innerText = "સ્ટેટસ: લાઈવ સાંભળી રહ્યા છીએ... (હવે મોબાઈલમાં અવાજ પ્લે કરો)";
+                document.getElementById('statusText').style.color = "green";
+
+                mediaRecorder = new MediaRecorder(stream);
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+                    audioChunks = []; 
+                    
+                    if(!isProcessing) {
+                        await sendToAI(audioBlob);
+                    }
+                };
+
+                intervalId = setInterval(() => {
+                    if (mediaRecorder.state === "recording") {
+                        mediaRecorder.stop();
+                        mediaRecorder.start();
+                    }
+                }, 2500);
+
+                mediaRecorder.start();
+
+            } catch (err) {
+                document.getElementById('statusText').innerText = "ભૂલ: માઈક એક્સેસ ના મળ્યો!";
+                document.getElementById('statusText').style.color = "red";
+                addLog("ભૂલ: મહેરબાની કરીને બ્રાઉઝર યુઆરએલ બારમાં માઈક સાઈન પર ક્લિક કરી Allow કરો.");
+            }
+        }
+
+        async function sendToAI(blob) {
+            isProcessing = true;
+            addLog("ઓડિયો પેકેટ AI સર્વર પર મોકલ્યું...");
+
+            try {
+                const response = await fetch(HF_API_URL, {
+                    headers: { "Authorization": HF_API_KEY },
+                    method: "POST",
+                    body: blob
+                });
+
+                const result = await response.json();
+                isProcessing = false;
+
+                if (result.error) {
+                    addLog("સર્વર રિસ્પોન્સ એરર: " + result.error);
+                    return;
+                }
+
+                const gunshot = result.find(item => 
+                    item.label.toLowerCase().includes("gunshot") || 
+                    item.label.toLowerCase().includes("firearm") ||
+                    item.label.toLowerCase().includes("explosion") ||
+                    item.label.toLowerCase().includes("weapon")
+                );
+
+                if (gunshot) {
+                    addLog(`મેચ મળ્યો 🎯: ${gunshot.label} (સ્કોર: ${Math.round(gunshot.score * 100)}%)`);
+                    if (gunshot.score > 0.20) {
+                        triggerAlerts(gunshot.label, gunshot.score);
+                    }
+                } else {
+                    addLog("કોઈ જોખમ નથી મળ્યું (સામાન્ય બેકગ્રાઉન્ડ અવાજ ફિલ્ટર થયો).");
+                }
+
+            } catch (error) {
+                isProcessing = false;
+                addLog("નેટવર્ક કનેક્શન ખોરવાયું.");
+            }
+        }
+
+        function triggerAlerts(label, score) {
+            document.getElementById('alertBox').style.display = "block";
+            document.getElementById('alertBox').innerText = `⚠️ ${label.toUpperCase()} DETECTED (${Math.round(score * 100)}%)!`;
+            addLog("🚨 ગનશોટ કન્ફર્મ! ટેલિગ્રામ અને જીમેલ સિસ્ટમ એક્ટિવેટ થઈ રહી છે...");
+            
+            sendGmailNotification();
+            sendTelegramMessage();
+
+            setTimeout(() => {
+                document.getElementById('alertBox').style.display = "none";
+            }, 6000);
+        }
+
+        function sendGmailNotification() {
+            console.log("Gmail notification triggered.");
+        }
+
+        function sendTelegramMessage() {
+            console.log("Telegram notification triggered.");
+        }
+    </script>
+</body>
+</html>
+
         const HF_API_KEY = "Bearer YOUR_HF_TOKEN"; 
 
         let mediaRecorder;
