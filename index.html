@@ -1,605 +1,270 @@
 <!DOCTYPE html>
-<html lang="gu">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>એનિબલ ડિસ્ટ્રેસ ડિટેક્ટર (Animal Distress Detector)</title>
-
-<!-- TensorFlow.js and YAMNet Dependency -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
-
-<style>
-* {
-    box-sizing: border-box;
-}
-
-body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: #101820;
-    color: white;
-    text-align: center;
-}
-
-.container {
-    max-width: 650px;
-    margin: auto;
-    padding: 20px;
-}
-
-h1 {
-    margin-bottom: 5px;
-}
-
-.subtitle {
-    color: #b8c7d1;
-    margin-bottom: 25px;
-}
-
-.card {
-    background: #1c2933;
-    border-radius: 18px;
-    padding: 20px;
-    margin-bottom: 18px;
-    box-shadow: 0 5px 20px rgba(0,0,0,.25);
-}
-
-button {
-    border: 0;
-    border-radius: 12px;
-    padding: 15px 25px;
-    font-size: 17px;
-    font-weight: bold;
-    cursor: pointer;
-    margin: 5px;
-}
-
-#startBtn {
-    background: #20c997;
-    color: white;
-}
-
-#stopBtn {
-    background: #dc3545;
-    color: white;
-}
-
-button:disabled {
-    opacity: .4;
-    cursor: not-allowed;
-}
-
-.status {
-    font-size: 25px;
-    font-weight: bold;
-    margin: 15px 0;
-}
-
-.normal {
-    color: #20c997;
-}
-
-.warning {
-    color: #ff5252;
-}
-
-.loading {
-    color: #ffc107;
-}
-
-.meter {
-    width: 100%;
-    height: 22px;
-    background: #34434e;
-    border-radius: 20px;
-    overflow: hidden;
-    margin: 12px 0;
-}
-
-.meterFill {
-    width: 0%;
-    height: 100%;
-    transition: width .15s;
-}
-
-#volumeBar {
-    background: #20c997;
-}
-
-#scoreBar {
-    background: #ff5252;
-}
-
-.value {
-    font-size: 32px;
-    font-weight: bold;
-}
-
-.small {
-    color: #aebbc4;
-    font-size: 14px;
-    line-height: 1.5;
-}
-
-#detectedSound {
-    font-size: 20px;
-    margin-top: 10px;
-}
-
-.log {
-    text-align: left;
-    background: #111a20;
-    border-radius: 10px;
-    padding: 12px;
-    max-height: 180px;
-    overflow-y: auto;
-    font-size: 14px;
-}
-
-.alertBox {
-    display: none;
-    background: #8b0000;
-    padding: 20px;
-    border-radius: 15px;
-    margin-top: 15px;
-    animation: blink 1s infinite;
-}
-
-@keyframes blink {
-    50% {
-        opacity: .55;
-    }
-}
-</style>
-</head>
-
-<body>
-
-<div class="container">
-
-<h1>🐾 પ્રાણી તકલીફ ઓળખ સિસ્ટમ</h1>
-
-<div class="subtitle">
-માઇક્રોફોન આધારિત સ્વચાલિત અવાજ દેખરેખ (YAMNet AI)
-</div>
-
-<div class="card">
-
-<button id="startBtn">
-🎙️ ડિટેક્શન શરૂ કરો
-</button>
-
-<button id="stopBtn" disabled>
-⛔ બંધ કરો
-</button>
-
-<div id="status" class="status loading">
-મોડેલ શરૂ થયું નથી
-</div>
-
-<div id="modelStatus" class="small">
-AI મોડેલ લોડ થઈ રહ્યું છે...
-</div>
-
-</div>
-
-<div class="card">
-
-<h3>🔊 માઇક્રોફોન વોલ્યુમ સ્તર</h3>
-
-<div class="meter">
-<div id="volumeBar" class="meterFill"></div>
-</div>
-
-<div id="volumeValue" class="value">
-0%
-</div>
-
-</div>
-
-<div class="card">
-
-<h3>🐾 ઓળખાયેલ પ્રાણીનો અવાજ</h3>
-
-<div id="detectedSound">
-રાહ જોઈ રહ્યું છે...
-</div>
-
-<p class="small">
-AI દ્વારા શોધાયેલ અવાજનો પ્રકાર
-</p>
-
-</div>
-
-<div class="card">
-
-<h3>⚠️ સંભવિત તકલીફ (Distress) સ્કોર</h3>
-
-<div class="meter">
-<div id="scoreBar" class="meterFill"></div>
-</div>
-
-<div id="scoreValue" class="value">
-0%
-</div>
-
-<div id="alertBox" class="alertBox">
-🚨 સંભવિત પ્રાણી મુશ્કેલીમાં છે! 🚨
-<br>
-પ્રાણીનો મુશ્કેલી અથવા પીડા દર્શાવતો અવાજ મળી આવ્યો છે.
-</div>
-
-</div>
-
-<div class="card">
-
-<h3>📋 ડિટેક્શન લોગ (Log)</h3>
-
-<div id="log" class="log">
-સિસ્ટમ શરૂ થઈ રહી છે...
-</div>
-
-</div>
-
-<div class="card small">
-
-<b>મહત્વપૂર્ણ નોંધ:</b><br>
-આ સિસ્ટમ પ્રાણી પર હુમલો થઈ રહ્યો છે તે સીધું ઓળખતી નથી.
-તે માત્ર પ્રાણીના અવાજ અને મુશ્કેલી દર્શાવતી પેટર્ન શોધે છે.
-
-</div>
-
-</div>
-
-<script>
-
-let audioContext;
-let analyser;
-let microphone;
-let stream;
-
-let running = false;
-let audioBuffer = [];
-let lastDetection = 0;
-
-const startBtn = document.getElementById("startBtn");
-const stopBtn = document.getElementById("stopBtn");
-
-const statusEl = document.getElementById("status");
-const modelStatus = document.getElementById("modelStatus");
-
-const volumeBar = document.getElementById("volumeBar");
-const volumeValue = document.getElementById("volumeValue");
-
-const detectedSound = document.getElementById("detectedSound");
-
-const scoreBar = document.getElementById("scoreBar");
-const scoreValue = document.getElementById("scoreValue");
-
-const alertBox = document.getElementById("alertBox");
-const logBox = document.getElementById("log");
-
-// ૧. પ્રાણીઓ અને હિંસક અવાજના કીવર્ડ્સ
-const animalWords = [
-    "animal", "wild animals", "dog", "bark", "bow-wow", "howl", 
-    "growling", "whimper", "cat", "meow", "purr", "hiss", 
-    "roaring cats", "roar", "horse", "neigh", "whinny", "cow", 
-    "moo", "sheep", "bleat", "goat", "pig", "oink", "bird", 
-    "bird vocalization", "chirp", "frog", "insect", "wolf", 
-    "coyote", "lion", "tiger", "elephant", "monkey", "ape"
-];
-
-// ૨. દર્દ, ઈજા અને તકલીફના કીવર્ડ્સ
-const distressWords = [
-    "whimper", "whining", "crying", "screaming", "yelp", 
-    "growling", "howl", "roar", "squeak", "squeal", "snarl", "groan"
-];
-
-let model = null;
-
-const MODEL_URL = "https://tfhub.dev/google/tfjs-model/yamnet/tfjs/1";
-const CLASS_MAP_URL = "https://raw.githubusercontent.com/tensorflow/models/master/research/audioset/yamnet/yamnet_class_map.csv";
-
-let classNames = [];
-
-// ૧. મોડેલના ક્લાસ નેમ લોડ કરવા
-async function loadClassNames() {
-    try {
-        const response = await fetch(CLASS_MAP_URL);
-        const text = await response.text();
-        const lines = text.trim().split("\n");
-
-        classNames = [];
-        for (let i = 1; i < lines.length; i++) {
-            const parts = lines[i].split(",");
-            if (parts.length >= 3) {
-                classNames.push(parts[2].replace(/^"|"$/g, ""));
-            }
-        }
-        console.log("ક્લાસિસ લોડ થયા:", classNames.length);
-    } catch (error) {
-        console.error("ક્લાસ નામો લોડ કરવામાં ભૂલ:", error);
-        classNames = [];
-    }
-}
-
-// ૨. YAMNet AI મોડેલ લોડ કરવું
-async function loadModel() {
-    try {
-        modelStatus.innerText = "AI મોડેલ ડાઉનલોડ થઈ રહ્યું છે...";
-
-        await tf.ready();
-
-        try {
-            await tf.setBackend("webgl");
-        } catch (e) {
-            await tf.setBackend("cpu");
-        }
-
-        await loadClassNames();
-
-        model = await tf.loadGraphModel(MODEL_URL, { fromTFHub: true });
-
-        modelStatus.innerText = "✅ AI મોડેલ તૈયાર છે";
-        statusEl.innerText = "તૈયાર છે";
-        statusEl.className = "status normal";
-
-        addLog("YAMNet AI મોડેલ સફળતાપૂર્વક લોડ થયું.");
-    } catch(error) {
-        console.error("મોડેલ લોડ એરર:", error);
-        modelStatus.innerText = "❌ મોડેલ લોડ કરવામાં ભૂલ આવી";
-        statusEl.innerText = "મોડેલ એરર";
-        statusEl.className = "status warning";
-        addLog("એરર: " + error.message);
-    }
-}
-
-// ૩. માઇક્રોફોન શરૂ કરવું
-async function startMicrophone() {
-    if (!model) {
-        alert("AI મોડેલ હજી લોડ થઈ રહ્યું છે. મહેરબાની કરીને થોડી રાહ જુઓ.");
-        return;
-    }
-
-    try {
-        stream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false
-            }
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gir Forest System - Live Dashboard</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { background-color: #121212; color: #ffffff; font-family: 'Segoe UI', Arial, sans-serif; text-align: center; }
+      nav { background: #1f1f1f; display: flex; justify-content: center; border-bottom: 2px solid #333; }
+      nav button { background: none; border: none; color: #aaa; padding: 15px 30px; font-size: 16px; font-weight: bold; cursor: pointer; }
+      nav button.active { color: #00e676; border-bottom: 3px solid #00e676; }
+      .tab-content { display: none; padding: 20px; max-width: 500px; margin: 0 auto; }
+      .tab-content.active { display: block; }
+      .card { background: #1e1e1e; border-radius: 12px; padding: 20px; margin-top: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+      .status-box { padding: 20px; margin-top: 10px; font-size: 18px; font-weight: bold; border-radius: 8px; transition: 0.3s; }
+      .safe { background-color: #2e7d32; color: #ffffff; }
+      .alert { background-color: #c62828; color: #ffffff; animation: blink 0.8s infinite; }
+      @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+      #webcam-container {
+        position: relative;
+        border: 2px solid #2e7d32;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #000;
+        margin-top: 15px;
+      }
+      video { width: 100%; height: auto; display: block; }
+
+      .sms-container { background: #181818; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-top: 15px; max-height: 300px; overflow-y: auto; text-align: left; }
+      .sms-bubble { background: #282828; border-left: 4px solid #00e676; padding: 10px; margin-bottom: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
+      .sms-bubble.alert-sms { border-left-color: #ff5252; }
+      .sms-time { font-size: 11px; color: #00e676; margin-bottom: 3px; }
+      .alert-sms .sms-time { color: #ff5252; }
+      .sms-text { font-size: 13px; }
+      .delete-btn { background: #dc3545; color: #fff; border: none; padding: 4px 8px; font-size: 11px; border-radius: 4px; cursor: pointer; }
+      .button-group { margin-top: 15px; display: flex; gap: 10px; }
+      button.btn-clear { background: #ff3547; color: #fff; border: none; padding: 10px; font-weight: bold; border-radius: 5px; cursor: pointer; flex: 1; }
+    </style>
+  </head>
+  <body>
+
+    <nav>
+      <button id="tab1-btn" class="active" onclick="switchTab('monitoring')">📊 Monitoring</button>
+      <button id="tab2-btn" onclick="switchTab('messages')">💬 SMS Alerts</button>
+    </nav>
+
+    <div id="monitoring" class="tab-content active">
+      <h2>Gir Forest Live Surveillance</h2>
+      <div class="card">
+        <div id="forestStatus" class="status-box safe">CONNECTING TO CLOUD...</div>
+        <div id="webcam-container">
+          <video id="webcam" autoplay playsinline muted></video>
+        </div>
+      </div>
+    </div>
+
+    <div id="messages" class="tab-content">
+      <h2>SMS Notification System</h2>
+      <div class="card">
+        <div class="sms-container" id="smsLog"></div>
+        <div class="button-group">
+          <button class="btn-clear" onclick="clearAllSMS()">Clear All Logs</button>
+        </div>
+      </div>
+    </div>
+
+    <canvas id="photoCanvas" style="display:none;"></canvas>
+
+    <!-- EmailJS SDK -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+
+    <!-- Firebase JavaScript SDK (v10.7.1) -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+      import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyCCNe68w8w9MqiZ3bBBdSa9D9G5wT9CyHM",
+        authDomain: "fore-d68a4.firebaseapp.com",
+        databaseURL: "https://fore-d68a4-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "fore-d68a4",
+        storageBucket: "fore-d68a4.firebasestorage.app",
+        messagingSenderId: "948704983419",
+        appId: "1:948704983419:web:64efa58ae654b21e5fa5de",
+        measurementId: "G-SH5DLY1JQY"
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const db = getDatabase(app);
+
+      // EmailJS Config
+      const EMAILJS_SERVICE_ID = "service_9t8ppxg";
+      const EMAILJS_TEMPLATE_ID = "template_cvp7e1i"; 
+      const EMAILJS_PUBLIC_KEY = "ZXgCOupaENPcCchAD";
+      
+      emailjs.init(EMAILJS_PUBLIC_KEY);
+
+      const forestBox = document.getElementById('forestStatus');
+      const smsLogContainer = document.getElementById('smsLog');
+      const video = document.getElementById('webcam');
+      const photoCanvas = document.getElementById('photoCanvas');
+
+      let lastKnownStatus = -1;
+      let lastEmailSentTime = 0;
+      let smsList = JSON.parse(localStorage.getItem('saved_sms_logs')) || [];
+
+      window.switchTab = function(tabId) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        document.getElementById(tabId === 'monitoring' ? 'tab1-btn' : 'tab2-btn').classList.add('active');
+        if(tabId === 'messages') renderSMSLogs();
+      };
+
+      async function setupWebcam() {
+        return new Promise((resolve, reject) => {
+          navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false })
+            .then((stream) => { 
+              video.srcObject = stream; 
+              video.onloadedmetadata = () => resolve(); 
+            })
+            .catch((err) => reject(err));
         });
+      }
 
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-
-        if (audioContext.state === 'suspended') {
-            await audioContext.resume();
+      function grabCameraSnapshot() {
+        photoCanvas.width = 320;
+        photoCanvas.height = 240;
+        const ctx = photoCanvas.getContext('2d');
+        try {
+          ctx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
+          return photoCanvas.toDataURL('image/jpeg', 0.6);
+        } catch (e) {
+          console.error("Camera snapshot capture error:", e);
+          return "";
         }
+      }
 
-        microphone = audioContext.createMediaStreamSource(stream);
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 2048;
+      // 1. Send Email Notification
+      function sendGmailAlert(alertDetail) {
+        const timeString = new Date().toLocaleString();
+        const liveSnapshot = grabCameraSnapshot();
+        
+        const templateParams = {
+          to_name: "Forest Range Officer",
+          alert_time: timeString,
+          image_data: liveSnapshot,
+          message: `🚨 CRITICAL THREAT WARNING: ${alertDetail} within the sector boundary at ${timeString}. A real-time camera image is attached below.`
+        };
 
-        microphone.connect(analyser);
+        emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
+          .then(() => console.log("Email Alert Dispatched!"))
+          .catch((err) => console.error("EmailJS Error:", err));
+      }
 
-        running = true;
+      // 2. Send Telegram Photo Alert (Connected to index.py Backend)
+      function sendTelegramAlert(alertDetail) {
+        photoCanvas.width = 320;
+        photoCanvas.height = 240;
+        const ctx = photoCanvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
 
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
+        photoCanvas.toBlob((blob) => {
+          if (!blob) return;
+          const formData = new FormData();
+          formData.append('photo', blob, 'alert.jpg');
+          formData.append('animal', alertDetail);
 
-        statusEl.innerText = "🎙️ અવાજ સાંભળી રહ્યું છે...";
-        statusEl.className = "status normal";
+          fetch('/api/alert', {
+            method: 'POST',
+            body: formData
+          })
+          .then(res => res.json())
+          .then(data => console.log("Telegram Alert Sent:", data))
+          .catch(err => console.error("Telegram API Error:", err));
+        }, 'image/jpeg', 0.7);
+      }
 
-        addLog("માઇક્રોફોન ચાલુ કરવામાં આવ્યું.");
+      function renderSMSLogs() {
+        if (smsList.length === 0) {
+          smsLogContainer.innerHTML = "<p style='color: #666; text-align: center;'>No logs found.</p>";
+          return;
+        }
+        let htmlStr = "";
+        smsList.forEach(sms => {
+          htmlStr += `
+            <div class="sms-bubble ${sms.isAlert ? 'alert-sms' : ''}">
+              <div>
+                <div class="sms-time">🕒 ${sms.time}</div>
+                <div class="sms-text">${sms.text}</div>
+              </div>
+              <button class="delete-btn" onclick="deleteSingleSMS(${sms.id})">🗑️</button>
+            </div>
+          `;
+        });
+        smsLogContainer.innerHTML = htmlStr;
+      }
 
-        processMicrophone();
-    } catch(error) {
-        console.error("માઇક્રોફોન એરર:", error);
-        alert("માઇક્રોફોનની પરમિશન આપવી જરૂરી છે.");
-        addLog("માઇક્રોફોન ભૂલ: " + error.message);
-    }
-}
+      function addSmsLog(message, isAlert = false) {
+        smsList.unshift({ id: Date.now() + Math.random(), text: message, time: new Date().toLocaleTimeString(), isAlert: isAlert });
+        localStorage.setItem('saved_sms_logs', JSON.stringify(smsList));
+        renderSMSLogs();
+      }
 
-// ૪. માઇક્રોફોન બંધ કરવું
-function stopMicrophone() {
-    running = false;
+      window.deleteSingleSMS = function(id) {
+        smsList = smsList.filter(sms => sms.id !== id);
+        localStorage.setItem('saved_sms_logs', JSON.stringify(smsList));
+        renderSMSLogs();
+      };
 
-    if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-    }
+      window.clearAllSMS = function() {
+        smsList = [];
+        localStorage.setItem('saved_sms_logs', JSON.stringify(smsList));
+        renderSMSLogs();
+      };
 
-    if (audioContext) {
-        audioContext.close();
-    }
+      const statusRef = ref(db, '/forest/status');
 
-    startBtn.disabled = false;
-    stopBtn.disabled = true;
+      function listenToFirebase() {
+        onValue(statusRef, (snapshot) => {
+          const signal = snapshot.val();
 
-    statusEl.innerText = "બંધ છે";
-    statusEl.className = "status";
+          if (signal !== lastKnownStatus) {
+            lastKnownStatus = signal;
 
-    addLog("માઇક્રોફોન બંધ કરવામાં આવ્યું.");
-}
-
-// ૫. માઇકનો અવાજ પ્રોસેસ કરવો
-function processMicrophone() {
-    if (!running) return;
-
-    const data = new Float32Array(analyser.fftSize);
-    analyser.getFloatTimeDomainData(data);
-
-    let sum = 0;
-    for (let i = 0; i < data.length; i++) {
-        sum += data[i] * data[i];
-    }
-
-    const rms = Math.sqrt(sum / data.length);
-    let volume = Math.min(100, Math.round(rms * 500));
-
-    volumeBar.style.width = volume + "%";
-    volumeValue.innerText = volume + "%";
-
-    for (let i = 0; i < data.length; i++) {
-        audioBuffer.push(data[i]);
-    }
-
-    const maxSamples = audioContext.sampleRate;
-    if (audioBuffer.length > maxSamples) {
-        audioBuffer = audioBuffer.slice(audioBuffer.length - maxSamples);
-    }
-
-    if (
-        audioBuffer.length >= audioContext.sampleRate * 0.9 &&
-        Date.now() - lastDetection > 900
-    ) {
-        lastDetection = Date.now();
-        analyseAudio();
-    }
-
-    requestAnimationFrame(processMicrophone);
-}
-
-function resampleTo16k(input, inputRate) {
-    if (inputRate === 16000) {
-        return new Float32Array(input);
-    }
-
-    const ratio = inputRate / 16000;
-    const newLength = Math.round(input.length / ratio);
-    const output = new Float32Array(newLength);
-
-    for (let i = 0; i < newLength; i++) {
-        const position = i * ratio;
-        const index = Math.floor(position);
-        const fraction = position - index;
-        const a = input[index] || 0;
-        const b = input[index + 1] || 0;
-        output[i] = a + (b - a) * fraction;
-    }
-
-    return output;
-}
-
-// ૬. અવાજનું AI એનાલિસિસ કરવું
-async function analyseAudio() {
-    if (!model || !running) return;
-
-    tf.engine().startScope();
-
-    try {
-        const source = resampleTo16k(audioBuffer, audioContext.sampleRate);
-        const waveform = tf.tensor1d(source);
-        const result = model.execute(waveform);
-
-        let scores = Array.isArray(result) ? result[0] : result;
-        const scoreArray = await scores.array();
-
-        let vector;
-        if (Array.isArray(scoreArray[0])) {
-            const frames = scoreArray;
-            const count = frames.length;
-            const classes = frames[0].length;
-            vector = new Array(classes).fill(0);
-
-            for (let f = 0; f < count; f++) {
-                for (let c = 0; c < classes; c++) {
-                    vector[c] += frames[f][c];
-                }
+            if (signal === 1) {
+              forestBox.innerHTML = "⚠️ ALERT: GUNSHOT DETECTED!";
+              forestBox.className = "status-box alert";
+              addSmsLog("ALERT: Gunshot sound detected in Gir Forest sector!", true);
+              
+              if (Date.now() - lastEmailSentTime > 15000) {
+                // Email અને Telegram બંને એક સાથે મોકલાશે
+                sendGmailAlert("GUNSHOT SOUND DETECTED");
+                sendTelegramAlert("GUNSHOT SOUND DETECTED (Gir Forest)");
+                lastEmailSentTime = Date.now();
+              }
+            } else if (signal === 0) {
+              forestBox.innerHTML = "SAFE: NO GUNSHOT DETECTED";
+              forestBox.className = "status-box safe";
+              addSmsLog("UPDATE: Status clear - No gunshot detected.", false);
+            } else {
+              forestBox.innerHTML = "WAITING FOR DATA...";
+              forestBox.className = "status-box safe";
             }
+          }
+        }, (error) => {
+          console.error("Firebase Error:", error);
+          forestBox.innerHTML = "❌ PERMISSION / NETWORK ERROR";
+        });
+      }
 
-            for (let c = 0; c < classes; c++) {
-                vector[c] /= count;
-            }
-        } else {
-            vector = scoreArray;
+      async function init() {
+        try {
+          await setupWebcam();
+          forestBox.innerHTML = "WAITING FOR DATA...";
+          listenToFirebase();
+        } catch (err) {
+          console.error("Camera startup error:", err);
+          forestBox.innerHTML = "CAMERA ACCESS REQUIRED";
+          listenToFirebase();
         }
+      }
 
-        let topIndex = 0;
-        for (let i = 1; i < vector.length; i++) {
-            if (vector[i] > vector[topIndex]) {
-                topIndex = i;
-            }
-        }
-
-        const topScore = vector[topIndex] || 0;
-        const topName = classNames[topIndex] || "અજ્ઞાત અવાજ (Unknown)";
-
-        let animalScore = 0;
-        let distressScore = 0;
-        let animalDetected = false;
-
-        for (let i = 0; i < vector.length; i++) {
-            const name = (classNames[i] || "").toLowerCase();
-            const score = vector[i] || 0;
-
-            for (const word of animalWords) {
-                if (name.includes(word.toLowerCase())) {
-                    animalScore = Math.max(animalScore, score);
-                    animalDetected = true;
-                    break;
-                }
-            }
-
-            for (const word of distressWords) {
-                if (name.includes(word.toLowerCase())) {
-                    distressScore = Math.max(distressScore, score);
-                    break;
-                }
-            }
-        }
-
-        let finalScore = Math.max(distressScore, animalScore * 0.65);
-
-        if (animalDetected && topScore > 0.30) {
-            finalScore = Math.max(finalScore, topScore * 0.75);
-        }
-
-        let percent = Math.round(Math.min(1, finalScore) * 100);
-
-        detectedSound.innerText = topName + " — " + Math.round(topScore * 100) + "%";
-        scoreBar.style.width = percent + "%";
-        scoreValue.innerText = percent + "%";
-
-        if (animalDetected && percent >= 55) {
-            showDistress(percent, topName);
-        } else {
-            hideDistress();
-            statusEl.innerText = animalDetected ? "🐾 પ્રાણીનો અવાજ મળ્યો" : "🎙️ અવાજ સાંભળી રહ્યું છે...";
-            statusEl.className = "status normal";
-        }
-
-    } catch(error) {
-        console.error("AI એનાલિસિસ એરર:", error);
-    } finally {
-        tf.engine().endScope();
-    }
-}
-
-// ૭. દર્દ કે મુશ્કેલીનો અવાજ આવે ત્યારે અલાર્મ બતાવવું
-function showDistress(score, sound) {
-    statusEl.innerText = "🚨 સંભવિત પ્રાણી મુશ્કેલીમાં છે";
-    statusEl.className = "status warning";
-    alertBox.style.display = "block";
-    addLog("⚠️ ચેતવણી: " + sound + " (" + score + "%)");
-}
-
-function hideDistress() {
-    alertBox.style.display = "none";
-}
-
-function addLog(message) {
-    const time = new Date().toLocaleTimeString();
-    const line = document.createElement("div");
-    line.innerText = "[" + time + "] " + message;
-    logBox.prepend(line);
-}
-
-startBtn.onclick = startMicrophone;
-stopBtn.onclick = stopMicrophone;
-
-loadModel();
-
-</script>
-
-</body>
+      window.onload = init;
+      renderSMSLogs();
+    </script>
+  </body>
 </html>
