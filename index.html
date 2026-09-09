@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart AI Gunshot System</title>
+    <title>Smart Gunshot Selector</title>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; padding: 40px; background: #f4f4f9; }
         .btn { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 5px; margin: 10px; font-weight: bold;}
@@ -15,27 +15,22 @@
 </head>
 <body>
 
-    <h1>🚀 સ્માર્ટ ગનશોટ ડિટેક્શન સિસ્ટમ (Science Fair)</h1>
-    <p>Sadu Mic Filter - સામાન્ય અવાજો બ્લોક, માત્ર ગનશોટ પકડાશે</p>
+    <h1>🚀 એડવાન્સ્ડ ગનશોટ સિલેક્ટર (Science Fair)</h1>
+    <p>તાળી અને સામાન્ય અવાજ બ્લોક - માત્ર સાચો ગનશોટ પકડાશે</p>
     
     <button class="btn" id="startBtn">🔴 WIRELESS AI ચેકિંગ શરૂ કરો</button>
     
     <div class="status" id="statusText" style="background: #e2e2e2;">સ્ટેટસ: બંધ છે (ચાલુ કરવા બટન દબાવો)</div>
-    <div class="alert-box" id="alertBox">⚠️ Real Gunshot Detected! ટેલિગ્રામ અને જીમેલ એલાર્મ મોકલાઈ ગયા!</div>
+    <div class="alert-box" id="alertBox">⚠️ REAL GUNSHOT DETECTED! એલાર્મ મોકલાઈ ગયા!</div>
 
     <h3>લાઇવ કન્સોલ લોગ (System Progress):</h3>
-    <div class="log-box" id="logBox">સિસ્ટમ રેડી છે... સાદું વાયરલેસ માઈક કનેક્ટ કરી બટન દબાવો.</div>
+    <div class="log-box" id="logBox">સિસ્ટમ રેડી છે... વાયરલેસ માઈક કનેક્ટ કરી બટન દબાવો.</div>
 
     <script>
         let audioContext;
         let analyser;
         let microphone;
         let isListening = false;
-
-        // સ્માર્ટ ટાઇમિંગ ફિલ્ટરના વેરિયેબલ્સ
-        let soundStartTime = 0;
-        let isSoundAboveThreshold = false;
-        let peakVolume = 0;
 
         function addLog(text) {
             const logBox = document.getElementById('logBox');
@@ -45,11 +40,11 @@
 
         document.getElementById('startBtn').addEventListener('click', async () => {
             if (isListening) return;
-            addLog("સાદા માઈક્રોફોનનું સ્કેનિંગ શરૂ થઈ રહ્યું છે...");
-            startSmartFilter();
+            addLog("તાળી ફિલ્ટર એનાલાઇઝર લોડ થઈ રહ્યું છે...");
+            startAdvancedFilter();
         });
 
-        async function startSmartFilter() {
+        async function startAdvancedFilter() {
             try {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -57,75 +52,60 @@
                 });
                 
                 isListening = true;
-                document.getElementById('statusText').innerText = "સ્ટેટસ: સ્માર્ટ પલ્સ ફિલ્ટર એક્ટિવ છે...";
+                document.getElementById('statusText').innerText = "સ્ટેટસ: એડવાન્સ્ડ ફિલ્ટર એક્ટિવ છે...";
                 document.getElementById('statusText').style.color = "green";
-                addLog("સાદું વાયરલેસ માઈક સક્સેસફુલી કનેક્ટ થઈ ગયું!");
+                addLog("માઈક કનેક્ટ થઈ ગયું. હવે ટેસ્ટ કરો.");
 
                 analyser = audioContext.createAnalyser();
                 microphone = audioContext.createMediaStreamSource(stream);
                 
-                analyser.fftSize = 256; 
+                analyser.fftSize = 512; 
                 const bufferLength = analyser.frequencyBinCount;
                 const dataArray = new Uint8Array(bufferLength);
 
                 microphone.connect(analyser);
 
-                // દર ૨૦ મિલિસેકન્ડે (ખૂબ જ ફાસ્ટ) અવાજ ચેક કરશે
                 setInterval(() => {
                     analyser.getByteFrequencyData(dataArray);
                     
-                    // અવાજની કુલ મોટેરાઈ (Volume) માપો
-                    let total = 0;
-                    for (let i = 0; i < bufferLength; i++) {
-                        total += dataArray[i];
+                    // ૧. ગનશોટનો બેઝ (Low/Explosion Frequency: index 2 to 15)
+                    int bassSum = 0;
+                    for (int i = 2; i < 15; i++) {
+                        bassSum += dataArray[i];
                     }
-                    let currentVolume = total / bufferLength;
+                    float bassAvg = bassSum / 13.0;
 
-                    // ગનશોટ માટે મોટો અવાજ શરૂ થાય ત્યારે (Threshold = 75)
-                    if (currentVolume > 75) {
-                        if (!isSoundAboveThreshold) {
-                            soundStartTime = millis(); // અવાજ શરૂ થવાનો સમય
-                            isSoundAboveThreshold = true;
-                            peakVolume = currentVolume;
-                        }
-                        if (currentVolume > peakVolume) {
-                            peakVolume = currentVolume;
-                        }
-                    } else {
-                        // જ્યારે અવાજ શાંત થાય ત્યારે તેનું ટાઇમિંગ માપો
-                        if (isSoundAboveThreshold) {
-                            let soundDuration = millis() - soundStartTime; // અવાજ કેટલો લાંબો ચાલ્યો
-                            isSoundAboveThreshold = false;
-
-                            // 🎯 મોટો જાદુઈ ફિલ્ટર:
-                            // બંદૂકનો અવાજ ખૂબ જ ફાસ્ટ હોય છે, એટલે તેનો સમયગાળો 30ms થી 250ms ની વચ્ચે જ હશે.
-                            // જો તમે બોલશો ("હેલો" કે લાંબી બૂમ) તો તેનો સમય ૨૫૦ મિલિસેકન્ડ કરતાં વધુ (લાંબો) હશે, એટલે કોડ તેને ઇગ્નોર કરી દેશે!
-                            if (soundDuration > 30 && soundDuration < 250 && peakVolume > 110) {
-                                triggerAlerts(soundDuration, peakVolume);
-                            } else if (soundDuration >= 250) {
-                                addLog("સામાન્ય લાંબો અવાજ ફિલ્ટર થઈ ગયો (માણસનો અવાજ બ્લોક).");
-                            }
-                        }
+                    // ૨. ગનશોટની શાર્પનેસ (High-Pitch: index 80 to 220)
+                    int highSum = 0;
+                    for (int i = 80; i < 220; i++) {
+                        highSum += dataArray[i];
                     }
-                }, 20);
+                    float highAvg = highSum / 140.0;
+
+                    // કુલ અવાજની તીવ્રતા
+                    float totalVolume = (bassAvg + highAvg) / 2.0;
+
+                    // 🎯 તાળી અને ગનશોટ અલગ કરવાનું લોજિક:
+                    // તાળીમાં માત્ર શાર્પનેસ (High-Pitch) હોય છે, બેઝ (Bass) નથી હોતો.
+                    // બંદૂકના અવાજમાં ધડાકાને કારણે Bass અને High બંને ખુબ ઊંચા હોય છે.
+                    // જો હજુ પણ તાળી પકડાતી હોય, તો નીચેની 125 ની વેલ્યુ વધારીને 140 કે 150 કરી દેવી.
+                    if (bassAvg > 125 && highAvg > 110 && totalVolume > 120) {
+                        triggerAlerts(totalVolume);
+                    }
+                }, 80); // 80ms ની ઝડપે સતત સ્કેનિંગ
 
             } catch (err) {
                 document.getElementById('statusText').innerText = "ભૂલ: માઈક ના મળ્યો!";
                 document.getElementById('statusText').style.color = "red";
-                addLog("ભૂલ: મહેરબાની કરીને માઈક પરમિશન Allow કરો.");
+                addLog("ભૂલ: માઈક પરમિશન આપો.");
             }
         }
 
-        // મિલિસેકન્ડ મેળવવાનું ફંક્શન
-        function millis() {
-            return performance.now();
-        }
-
-        function triggerAlerts(duration, volume) {
+        function triggerAlerts(volume) {
             document.getElementById('alertBox').style.display = "block";
-            document.getElementById('alertBox').innerText = `⚠️ GUNSHOT DETECTED! (Speed: ${Math.round(duration)}ms)`;
+            document.getElementById('alertBox').innerText = `⚠️ GUNSHOT MATCHED! (Intensity: ${Math.round(volume)})`;
             
-            addLog(`🎯 બંદૂકનો તીવ્ર ઝટકો પકડાયો! સ્પીડ: ${Math.round(duration)}ms, મોટેરાઈ: ${Math.round(volume)}. એલાર્મ મોકલ્યા!`);
+            addLog(`🚨 તાળી ફિલ્ટર પાસ! આ સાચો ગનશોટ છે (તીવ્રતા: ${Math.round(volume)})! એલાર્મ ફાયર થયા.`);
             
             sendGmailNotification();
             sendTelegramMessage();
@@ -136,13 +116,8 @@
         }
 
         // ======= તમારા ઓરિજિનલ એલાર્મ ફંક્શન્સ =======
-        function sendGmailNotification() {
-            console.log("Gmail Sent.");
-        }
-
-        function sendTelegramMessage() {
-            console.log("Telegram Sent.");
-        }
+        function sendGmailNotification() { console.log("Gmail Sent."); }
+        function sendTelegramMessage() { console.log("Telegram Sent."); }
     </script>
 </body>
 </html>
