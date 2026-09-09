@@ -3,7 +3,7 @@
   <head>  
     <meta charset="UTF-8" />  
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />  
-    <title>ગીર જંગલ સુરક્ષા ડેશબોર્ડ (Gir Forest Safety Dashboard)</title>  
+    <title>ગીર જંગલ સુરક્ષા ડેશબોર્ડ</title>  
     <style>  
       * { box-sizing: border-box; margin: 0; padding: 0; }  
       body { background-color: #121212; color: #ffffff; font-family: 'Segoe UI', Arial, sans-serif; text-align: center; }  
@@ -37,7 +37,7 @@
       .delete-btn { background: #dc3545; color: #fff; border: none; padding: 4px 8px; font-size: 11px; border-radius: 4px; cursor: pointer; }  
 
       .mic-btn { background-color: #ff4757; color: white; border: none; padding: 12px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%; margin-top: 15px; }  
-      .mic-btn:disabled { background-color: #444; color: #888; }  
+      .select-box { width: 100%; padding: 10px; margin-top: 10px; border-radius: 6px; background: #282828; color: #00e676; border: 1px solid #00e676; font-size: 14px; }
     </style>  
   </head>  
   <body>  
@@ -53,9 +53,14 @@
         <div id="forestStatus" class="status-box safe">સિસ્ટમ શરૂ થઈ રહી છે...</div>  
 
         <div id="webcam-container">  
-          <!-- Camera Feed -->  
           <video id="webcam" autoplay playsinline muted></video>  
         </div>  
+
+        <!-- Mic Selection Dropdown -->
+        <label style="display:block; margin-top:15px; text-align:left; font-size:13px; color:#aaa;">🎙️ માઇક્રોફોન પસંદ કરો:</label>
+        <select id="micSelect" class="select-box" onchange="changeAudioInput()">
+          <option value="">માઇક શોધી રહ્યા છીએ...</option>
+        </select>
 
         <!-- Mic Control -->  
         <button id="recordBtn" class="mic-btn" onclick="toggleAIListening()">🎤 AI અવાજ મોનિટરિંગ શરૂ કરો</button>  
@@ -99,7 +104,6 @@
       const app = initializeApp(firebaseConfig);  
       const db = getDatabase(app);  
 
-      // EmailJS Setup (તમારા અસલ ક્રેડેન્શિયલ્સ રાખવામાં આવ્યા છે)
       const EMAILJS_SERVICE_ID = "service_9t8ppxg";  
       const EMAILJS_TEMPLATE_ID = "template_cvp7e1i";   
       const EMAILJS_PUBLIC_KEY = "ZXgCOupaENPcCchAD";  
@@ -109,12 +113,14 @@
       const smsLogContainer = document.getElementById('smsLog');  
       const video = document.getElementById('webcam');  
       const photoCanvas = document.getElementById('photoCanvas');  
+      const micSelect = document.getElementById('micSelect');
 
       let lastKnownStatus = -1;  
       let lastEmailSentTime = 0;  
       let smsList = JSON.parse(localStorage.getItem('saved_sms_logs')) || [];  
       let isAiListening = false;
       let audioRecognizer = null;
+      let selectedDeviceId = null;
 
       window.switchTab = function(tabId) {  
         document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));  
@@ -124,27 +130,54 @@
         if(tabId === 'messages') renderSMSLogs();  
       };  
 
-      // 1. કેમેરા અને માઇક્રોફોન ચાલુ કરવા માટે  
+      // માઇક્રોફોનની યાદી ડ્રોપડાઉનમાં મેળવો
+      async function populateAudioDevices() {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const audioInputs = devices.filter(device => device.kind === 'audioinput');
+          micSelect.innerHTML = '';
+          audioInputs.forEach((device, index) => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.text = device.label || `માઇક્રોફોન ${index + 1}`;
+            micSelect.appendChild(option);
+          });
+          if (audioInputs.length > 0) {
+            selectedDeviceId = audioInputs[0].deviceId;
+          }
+        } catch (e) {
+          console.error("Mic enumeration error:", e);
+        }
+      }
+
+      window.changeAudioInput = function() {
+        selectedDeviceId = micSelect.value;
+        if (isAiListening) {
+          toggleAIListening(); // રિસ્ટાર્ટ માઇક
+          toggleAIListening();
+        }
+      };
+
       async function setupMediaDevices() {  
         try {  
-          const stream = await navigator.mediaDevices.getUserMedia({   
-            video: { facingMode: "environment" },   
-            audio: true   
-          });  
+          const constraints = {
+            video: { facingMode: "environment" },
+            audio: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true
+          };
+          const stream = await navigator.mediaDevices.getUserMedia(constraints);  
           video.srcObject = stream;  
-          console.log("કેમેરા અને માઇક ચાલુ થયું!");  
+          await populateAudioDevices();
         } catch (e) {  
           try {  
             const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });  
             video.srcObject = stream;  
+            await populateAudioDevices();
           } catch (err) {  
-            console.error("Camera/Mic Error:", err);  
             forestBox.innerHTML = "⚠️ કેમેરા/માઇક પરમિશન રદ કરવામાં આવી છે";  
           }  
         }  
       }  
 
-      // 2. કેમેરા ફોટો કેપ્ચર  
       function grabCameraSnapshot() {  
         photoCanvas.width = 320;  
         photoCanvas.height = 240;  
@@ -157,7 +190,6 @@
         }  
       }  
 
-      // 3. ઈમેઈલ મોકલવા માટે  
       function sendGmailAlert(alertDetail) {  
         const timeString = new Date().toLocaleString();  
         const liveSnapshot = grabCameraSnapshot();  
@@ -174,7 +206,6 @@
           .catch((err) => console.error("EmailJS Error:", err));  
       }  
 
-      // 4. ટેલિગ્રામ પર મોકલવા માટે  
       function sendTelegramAlert(alertDetail) {  
         photoCanvas.width = 320;  
         photoCanvas.height = 240;  
@@ -197,7 +228,6 @@
         }, 'image/jpeg', 0.7);  
       }  
 
-      // 5. AI આધારિત રીઅલ-ટાઇમ ઓડિયો એનાલિસિસ (YAMNet / Speech Recognition Model)
       async function setupAIAudioModel() {
         const resultDiv = document.getElementById("aiResult");
         try {
@@ -205,10 +235,9 @@
           audioRecognizer = speechCommands.create("BROWSER_FFT");
           await audioRecognizer.ensureModelLoaded();
           
-          resultDiv.innerText = "✅ AI મોડેલ તૈયાર છે! 'Start AI Audio Monitoring' પર ક્લિક કરો.";
+          resultDiv.innerText = "✅ AI મોડેલ તૈયાર છે!";
           resultDiv.style.color = "#00e676";
         } catch (e) {
-          console.error("AI Model Error:", e);
           resultDiv.innerText = "❌ AI મોડેલ લોડ કરવામાં ભૂલ થઈ.";
           resultDiv.style.color = "#ff5252";
         }
@@ -225,40 +254,35 @@
         if (!isAiListening) {
           isAiListening = true;
           btn.innerText = "🛑 AI ઓડિયો મોનિટરિંગ બંધ કરો";
-          resultDiv.innerText = "🎧 AI અવાજ સાંભળી રહ્યું છે (સામાન્ય અવાજ / બંદૂક અવાજ ચકાસણી)...";
+          resultDiv.innerText = "🎧 અવાજ ચેક થઈ રહ્યો છે...";
           resultDiv.style.color = "#ffb142";
 
           audioRecognizer.listen(result => {
             const scores = result.scores;
-            const labels = audioRecognizer.wordLabels();
             
-            // ઉચ્ચ અવાજની તીવ્રતા અને સ્પેક્ટ્રમ ચેક
-            let maxScoreIndex = scores.indexOf(Math.max(...scores));
-            let detectedLabel = labels[maxScoreIndex];
-            
-            // Gunshot / Noise Peak detection logic
+            // મોબાઈલ સ્પીકરના રેકોર્ડ કરેલા અવાજો પકડવા માટે સેન્સિટિવિટી વધારે રાખેલ છે
             let audioVolume = scores.reduce((a, b) => a + b, 0) / scores.length;
 
-            // જો સામાન્ય બોલવાનો અવાજ હોય તો નોર્મલ બતાવશે
-            if (audioVolume < 0.15) {
-              resultDiv.innerText = "🟢 સામાન્ય અવાજ (Normal Sound Detected)";
+            // જો અવાજ ખૂબ જ ઓછો હોય (શાંત વાતાવરણ)
+            if (audioVolume < 0.05) {
+              resultDiv.innerText = "🟢 સામાન્ય શાંત અવાજ (Normal Voice / Silence)";
               resultDiv.style.color = "#00e676";
               return;
             }
 
-            // જો બંદૂક, સ્ફોટ કે મોટો ઈમ્પેક્ટ સાઉન્ડ આવે ત્યારે જ એલર્ટ આપશે
-            if (audioVolume > 0.45) {
-              resultDiv.innerText = "🚨 બંદૂકના અવાજની શક્યતા! (GUNSHOT DETECTED)";
+            // મોબાઈલ સ્પીકરના રેકોર્ડિંગ અથવા બંદૂકના અવાજ માટે લિમિટ 0.15 કરી દીધી છે (ઘટાડેલી ટકાવારી)
+            if (audioVolume >= 0.15) {
+              resultDiv.innerText = "🚨 બંદૂકના અવાજની શક્યતા (GUNSHOT DETECTED)!";
               resultDiv.style.color = "#ff5252";
 
               const now = Date.now();
-              if (now - lastEmailSentTime > 15000) {
-                forestBox.innerHTML = "⚠️ ચેતવણી: બંદૂકનો અવાજ શોધાયો!";
+              if (now - lastEmailSentTime > 12000) {
+                forestBox.innerHTML = "⚠️ ચેતવણી: બંદૂકનો અવાજ શોધી કાઢ્યો!";
                 forestBox.className = "status-box alert";
 
-                addSmsLog("ALERT: AI માઇક દ્વારા બંદૂકનો અવાજ ડિટેક્ટ થયો!", true);
-                sendGmailAlert("GUNSHOT DETECTED VIA AI MIC");
-                sendTelegramAlert("GUNSHOT DETECTED VIA AI MIC");
+                addSmsLog("ALERT: રેકોર્ડિંગ/માઇક દ્વારા બંદૂકનો અવાજ ડિટેક્ટ થયો!", true);
+                sendGmailAlert("GUNSHOT DETECTED VIA RECORDED AUDIO");
+                sendTelegramAlert("GUNSHOT DETECTED VIA RECORDED AUDIO");
 
                 lastEmailSentTime = now;
 
@@ -268,12 +292,12 @@
                 }, 8000);
               }
             } else {
-              resultDiv.innerText = "🗣️ સામાન્ય બોલવાનો અવાજ (Normal Voice)";
+              resultDiv.innerText = "🗣️ સામાન્ય અવાજ (Normal Voice)";
               resultDiv.style.color = "#00e676";
             }
           }, {
             includeSpectrogram: true,
-            probabilityThreshold: 0.7,
+            probabilityThreshold: 0.15, // પર્સેન્ટેજ ડાઉન (Low Threshold for Mobile Speakers)
             overlapFactor: 0.5
           });
 
@@ -324,7 +348,6 @@
         renderSMSLogs();  
       };  
 
-      // Firebase Listener  
       const statusRef = ref(db, '/forest/status');  
 
       function listenToFirebase() {  
@@ -354,7 +377,6 @@
             }  
           }  
         }, (error) => {  
-          console.error("Firebase Error:", error);  
           forestBox.innerHTML = "❌ કનેક્શનમાં ભૂલ આવી";  
         });  
       }  
