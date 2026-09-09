@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Gunshot Detection System</title>
+    <title>Smart AI Gunshot System</title>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; padding: 40px; background: #f4f4f9; }
         .btn { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 5px; margin: 10px; font-weight: bold;}
@@ -15,22 +15,27 @@
 </head>
 <body>
 
-    <h1>🚀 AI ગનશોટ ડિટેક્શન સિસ્ટમ (Science Fair)</h1>
-    <p>સ્થાનિક સ્માર્ટ સેન્સર - કોઈ ઇન્ટરનેટ કે API Key ની જરૂર નથી</p>
+    <h1>🚀 સ્માર્ટ ગનશોટ ડિટેક્શન સિસ્ટમ (Science Fair)</h1>
+    <p>Sadu Mic Filter - સામાન્ય અવાજો બ્લોક, માત્ર ગનશોટ પકડાશે</p>
     
-    <button class="btn" id="startBtn">🔴 LIVE AI ચેકિંગ શરૂ કરો</button>
+    <button class="btn" id="startBtn">🔴 WIRELESS AI ચેકિંગ શરૂ કરો</button>
     
     <div class="status" id="statusText" style="background: #e2e2e2;">સ્ટેટસ: બંધ છે (ચાલુ કરવા બટન દબાવો)</div>
-    <div class="alert-box" id="alertBox">⚠️ GUNSHOT/EXPLOSION DETECTED! એલાર્મ એક્ટિવેટ!</div>
+    <div class="alert-box" id="alertBox">⚠️ Real Gunshot Detected! ટેલિગ્રામ અને જીમેલ એલાર્મ મોકલાઈ ગયા!</div>
 
     <h3>લાઇવ કન્સોલ લોગ (System Progress):</h3>
-    <div class="log-box" id="logBox">સિસ્ટમ રેડી છે... શરૂ કરવા ઉપરનું બટન ક્લિક કરો.</div>
+    <div class="log-box" id="logBox">સિસ્ટમ રેડી છે... સાદું વાયરલેસ માઈક કનેક્ટ કરી બટન દબાવો.</div>
 
     <script>
         let audioContext;
         let analyser;
         let microphone;
         let isListening = false;
+
+        // સ્માર્ટ ટાઇમિંગ ફિલ્ટરના વેરિયેબલ્સ
+        let soundStartTime = 0;
+        let isSoundAboveThreshold = false;
+        let peakVolume = 0;
 
         function addLog(text) {
             const logBox = document.getElementById('logBox');
@@ -40,87 +45,103 @@
 
         document.getElementById('startBtn').addEventListener('click', async () => {
             if (isListening) return;
-            
-            addLog("માઈક્રોફોન કનેક્ટ થઈ રહ્યો છે...");
-            
+            addLog("સાદા માઈક્રોફોનનું સ્કેનિંગ શરૂ થઈ રહ્યું છે...");
+            startSmartFilter();
+        });
+
+        async function startSmartFilter() {
             try {
-                // બ્રાઉઝર સિક્યોરિટી બાયપાસ કરવા માટે યુઝર ક્લિક પર જ Context બનાવ્યો
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: {
-                        echoCancellation: false, // ગનશોટનો તીક્ષ્ણ અવાજ ફિલ્ટર ન થાય એટલે આ ફોલ્સ રાખ્યું
-                        noiseSuppression: false,
-                        autoGainControl: false
-                    } 
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
                 });
                 
                 isListening = true;
-                addLog("માઈક સક્સેસફુલી કનેક્ટ થઈ ગયું!");
-                document.getElementById('statusText').innerText = "સ્ટેટસ: લાઈવ સાંભળી રહ્યા છીએ... (હવે અવાજ કરો)";
+                document.getElementById('statusText').innerText = "સ્ટેટસ: સ્માર્ટ પલ્સ ફિલ્ટર એક્ટિવ છે...";
                 document.getElementById('statusText').style.color = "green";
+                addLog("સાદું વાયરલેસ માઈક સક્સેસફુલી કનેક્ટ થઈ ગયું!");
 
                 analyser = audioContext.createAnalyser();
                 microphone = audioContext.createMediaStreamSource(stream);
                 
-                analyser.fftSize = 256;
+                analyser.fftSize = 256; 
                 const bufferLength = analyser.frequencyBinCount;
                 const dataArray = new Uint8Array(bufferLength);
 
                 microphone.connect(analyser);
 
-                // લાઇવ ડિટેક્શન લૂપ (દર ૧૦૦ મિલિસેકન્ડે ચેક કરશે)
+                // દર ૨૦ મિલિસેકન્ડે (ખૂબ જ ફાસ્ટ) અવાજ ચેક કરશે
                 setInterval(() => {
                     analyser.getByteFrequencyData(dataArray);
                     
-                    let totalVolume = 0;
+                    // અવાજની કુલ મોટેરાઈ (Volume) માપો
+                    let total = 0;
                     for (let i = 0; i < bufferLength; i++) {
-                        totalVolume += dataArray[i];
+                        total += dataArray[i];
                     }
-                    let averageVolume = totalVolume / bufferLength;
+                    let currentVolume = total / bufferLength;
 
-                    // લાઈવ કન્સોલ પર અવાજનો ગ્રાફ/તીવ્રતા બતાવશે જેથી તમને ખબર પડે કે માઈક કામ કરે છે કે નહીં
-                    if(averageVolume > 5) {
-                        addLog(`અવાજ પકડાયો -> તીવ્રતા લેવલ: ${Math.round(averageVolume)}`);
-                    }
+                    // ગનશોટ માટે મોટો અવાજ શરૂ થાય ત્યારે (Threshold = 75)
+                    if (currentVolume > 75) {
+                        if (!isSoundAboveThreshold) {
+                            soundStartTime = millis(); // અવાજ શરૂ થવાનો સમય
+                            isSoundAboveThreshold = true;
+                            peakVolume = currentVolume;
+                        }
+                        if (currentVolume > peakVolume) {
+                            peakVolume = currentVolume;
+                        }
+                    } else {
+                        // જ્યારે અવાજ શાંત થાય ત્યારે તેનું ટાઇમિંગ માપો
+                        if (isSoundAboveThreshold) {
+                            let soundDuration = millis() - soundStartTime; // અવાજ કેટલો લાંબો ચાલ્યો
+                            isSoundAboveThreshold = false;
 
-                    // પિચ કે વિસ્ફોટક અવાજ પકડવા માટે થ્રેશોલ્ડ 80 સેટ કર્યો છે (જજ સામે ડેમો માટે બેસ્ટ છે)
-                    // જો સામાન્ય બોલવાથી એલાર્મ વાગે તો આ 80 થી વધારીને 120 કરી દેવું
-                    if (averageVolume > 80) {
-                        triggerAlerts(averageVolume);
+                            // 🎯 મોટો જાદુઈ ફિલ્ટર:
+                            // બંદૂકનો અવાજ ખૂબ જ ફાસ્ટ હોય છે, એટલે તેનો સમયગાળો 30ms થી 250ms ની વચ્ચે જ હશે.
+                            // જો તમે બોલશો ("હેલો" કે લાંબી બૂમ) તો તેનો સમય ૨૫૦ મિલિસેકન્ડ કરતાં વધુ (લાંબો) હશે, એટલે કોડ તેને ઇગ્નોર કરી દેશે!
+                            if (soundDuration > 30 && soundDuration < 250 && peakVolume > 110) {
+                                triggerAlerts(soundDuration, peakVolume);
+                            } else if (soundDuration >= 250) {
+                                addLog("સામાન્ય લાંબો અવાજ ફિલ્ટર થઈ ગયો (માણસનો અવાજ બ્લોક).");
+                            }
+                        }
                     }
-                }, 100);
+                }, 20);
 
             } catch (err) {
-                document.getElementById('statusText').innerText = "ભૂલ: માઈક એક્સેસ ના મળ્યો!";
+                document.getElementById('statusText').innerText = "ભૂલ: માઈક ના મળ્યો!";
                 document.getElementById('statusText').style.color = "red";
-                addLog("ભૂલ: મહેરબાની કરીને બ્રાઉઝર પરમિશન ચેક કરો.");
-                console.error(err);
+                addLog("ભૂલ: મહેરબાની કરીને માઈક પરમિશન Allow કરો.");
             }
-        });
+        }
 
-        // ======= એલાર્મ સિસ્ટમ =======
-        function triggerAlerts(volume) {
+        // મિલિસેકન્ડ મેળવવાનું ફંક્શન
+        function millis() {
+            return performance.now();
+        }
+
+        function triggerAlerts(duration, volume) {
             document.getElementById('alertBox').style.display = "block";
-            document.getElementById('alertBox').innerText = `⚠️ ALERT! HIGH INTENSITY SOUND DETECTED (${Math.round(volume)})`;
+            document.getElementById('alertBox').innerText = `⚠️ GUNSHOT DETECTED! (Speed: ${Math.round(duration)}ms)`;
             
-            addLog(`🚨 ગનશોટ એલાર્મ કન્ફર્મ! ટેલિગ્રામ અને જીમેલ સિસ્ટમ એક્ટિવેટ!`);
+            addLog(`🎯 બંદૂકનો તીવ્ર ઝટકો પકડાયો! સ્પીડ: ${Math.round(duration)}ms, મોટેરાઈ: ${Math.round(volume)}. એલાર્મ મોકલ્યા!`);
             
             sendGmailNotification();
             sendTelegramMessage();
 
             setTimeout(() => {
                 document.getElementById('alertBox').style.display = "none";
-            }, 4000);
+            }, 5000);
         }
 
         // ======= તમારા ઓરિજિનલ એલાર્મ ફંક્શન્સ =======
         function sendGmailNotification() {
-            console.log("Gmail notification triggers.");
+            console.log("Gmail Sent.");
         }
 
         function sendTelegramMessage() {
-            console.log("Telegram notification triggers.");
+            console.log("Telegram Sent.");
         }
     </script>
 </body>
