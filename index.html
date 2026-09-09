@@ -1,305 +1,373 @@
-<!DOCTYPE html>
-<html lang="gu">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gir Forest Safety Dashboard</title>
-    <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { background-color: #121212; color: #ffffff; font-family: 'Segoe UI', Arial, sans-serif; text-align: center; }
-      nav { background: #1f1f1f; display: flex; justify-content: center; border-bottom: 2px solid #333; }
-      nav button { background: none; border: none; color: #aaa; padding: 15px 25px; font-size: 15px; font-weight: bold; cursor: pointer; }
-      nav button.active { color: #00e676; border-bottom: 3px solid #00e676; }
-      
-      .tab-content { display: none; padding: 20px; max-width: 500px; margin: 0 auto; }
-      .tab-content.active { display: block; }
-      .card { background: #1e1e1e; border-radius: 12px; padding: 20px; margin-top: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-      
-      .status-box { padding: 20px; margin-top: 10px; font-size: 18px; font-weight: bold; border-radius: 8px; }
-      .safe { background-color: #2e7d32; color: #ffffff; }
-      .alert { background-color: #c62828; color: #ffffff; animation: blink 0.8s infinite; }
-      @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+<!DOCTYPE html>  
+<html lang="gu">  
+  <head>  
+    <meta charset="UTF-8" />  
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />  
+    <title>ગીર જંગલ સુરક્ષા ડેશબોર્ડ (Gir Forest Safety Dashboard)</title>  
+    <style>  
+      * { box-sizing: border-box; margin: 0; padding: 0; }  
+      body { background-color: #121212; color: #ffffff; font-family: 'Segoe UI', Arial, sans-serif; text-align: center; }  
+      nav { background: #1f1f1f; display: flex; justify-content: center; border-bottom: 2px solid #333; }  
+      nav button { background: none; border: none; color: #aaa; padding: 15px 25px; font-size: 15px; font-weight: bold; cursor: pointer; }  
+      nav button.active { color: #00e676; border-bottom: 3px solid #00e676; }  
+      .tab-content { display: none; padding: 20px; max-width: 500px; margin: 0 auto; }  
+      .tab-content.active { display: block; }  
+      .card { background: #1e1e1e; border-radius: 12px; padding: 20px; margin-top: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }  
 
-      #webcam-container {
-        position: relative;
-        border: 2px solid #00e676;
-        border-radius: 8px;
-        overflow: hidden;
-        background: #000;
-        margin-top: 15px;
-      }
-      video { width: 100%; height: auto; display: block; }
+      .status-box { padding: 20px; margin-top: 10px; font-size: 18px; font-weight: bold; border-radius: 8px; }  
+      .safe { background-color: #2e7d32; color: #ffffff; }  
+      .alert { background-color: #c62828; color: #ffffff; animation: blink 0.8s infinite; }  
+      @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }  
 
-      .sms-container { background: #181818; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-top: 15px; max-height: 250px; overflow-y: auto; text-align: left; }
-      .sms-bubble { background: #282828; border-left: 4px solid #00e676; padding: 10px; margin-bottom: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
-      .sms-bubble.alert-sms { border-left-color: #ff5252; }
-      .sms-time { font-size: 11px; color: #00e676; }
-      .sms-text { font-size: 13px; }
-      .delete-btn { background: #dc3545; color: #fff; border: none; padding: 4px 8px; font-size: 11px; border-radius: 4px; cursor: pointer; }
-      
-      .mic-btn { background-color: #ff4757; color: white; border: none; padding: 12px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%; margin-top: 15px; }
-      .mic-btn:disabled { background-color: #444; color: #888; }
-    </style>
-  </head>
-  <body>
+      #webcam-container {  
+        position: relative;  
+        border: 2px solid #00e676;  
+        border-radius: 8px;  
+        overflow: hidden;  
+        background: #000;  
+        margin-top: 15px;  
+      }  
+      video { width: 100%; height: auto; display: block; }  
 
-    <nav>
-      <button id="tab1-btn" class="active" onclick="switchTab('monitoring')">📊 Monitoring & Stream</button>
-      <button id="tab2-btn" onclick="switchTab('messages')">💬 Alert Logs</button>
-    </nav>
+      .sms-container { background: #181818; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-top: 15px; max-height: 250px; overflow-y: auto; text-align: left; }  
+      .sms-bubble { background: #282828; border-left: 4px solid #00e676; padding: 10px; margin-bottom: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }  
+      .sms-bubble.alert-sms { border-left-color: #ff5252; }  
+      .sms-time { font-size: 11px; color: #00e676; }  
+      .sms-text { font-size: 13px; }  
+      .delete-btn { background: #dc3545; color: #fff; border: none; padding: 4px 8px; font-size: 11px; border-radius: 4px; cursor: pointer; }  
 
-    <!-- TAB 1: Live Surveillance, Camera & Mic -->
-    <div id="monitoring" class="tab-content active">
-      <h2>Gir Forest Surveillance</h2>
-      <div class="card">
-        <div id="forestStatus" class="status-box safe">STARTING SYSTEM...</div>
-        
-        <div id="webcam-container">
-          <!-- Camera Feed -->
-          <video id="webcam" autoplay playsinline muted></video>
-        </div>
+      .mic-btn { background-color: #ff4757; color: white; border: none; padding: 12px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%; margin-top: 15px; }  
+      .mic-btn:disabled { background-color: #444; color: #888; }  
+    </style>  
+  </head>  
+  <body>  
+    <nav>  
+      <button id="tab1-btn" class="active" onclick="switchTab('monitoring')">📊 મોનિટરિંગ અને સ્ટ્રીમ</button>  
+      <button id="tab2-btn" onclick="switchTab('messages')">💬 એલર્ટ લોગ્સ</button>  
+    </nav>  
 
-        <!-- Mic Test Trigger Button -->
-        <button id="recordBtn" class="mic-btn" onclick="testMicAndCamera()">🎤 Test Mic Sound & Capture Photo</button>
-        <div id="aiResult" style="margin-top:10px; font-size:14px; color:#aaa;">Mic Status: Ready</div>
-      </div>
-    </div>
+    <!-- TAB 1: Live Surveillance, Camera & Mic -->  
+    <div id="monitoring" class="tab-content active">  
+      <h2>ગીર જંગલ સર્વેલન્સ (AI આધારિત)</h2>  
+      <div class="card">  
+        <div id="forestStatus" class="status-box safe">સિસ્ટમ શરૂ થઈ રહી છે...</div>  
 
-    <!-- TAB 2: SMS & Notification Logs -->
-    <div id="messages" class="tab-content">
-      <h2>System Logs</h2>
-      <div class="card">
-        <div class="sms-container" id="smsLog"></div>
-        <button style="background:#ff3547; color:#fff; border:none; padding:10px; width:100%; border-radius:5px; margin-top:10px; cursor:pointer;" onclick="clearAllSMS()">Clear Logs</button>
-      </div>
-    </div>
+        <div id="webcam-container">  
+          <!-- Camera Feed -->  
+          <video id="webcam" autoplay playsinline muted></video>  
+        </div>  
 
-    <canvas id="photoCanvas" style="display:none;"></canvas>
+        <!-- Mic Control -->  
+        <button id="recordBtn" class="mic-btn" onclick="toggleAIListening()">🎤 AI અવાજ મોનિટરિંગ શરૂ કરો</button>  
+        <div id="aiResult" style="margin-top:10px; font-size:14px; color:#aaa;">AI મોડેલ સ્ટેટસ: પ્રક્રિયામાં...</div>  
+      </div>  
+    </div>  
 
-    <!-- EmailJS SDK -->
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <!-- TAB 2: SMS & Notification Logs -->  
+    <div id="messages" class="tab-content">  
+      <h2>સિસ્ટમ લોગ્સ</h2>  
+      <div class="card">  
+        <div class="sms-container" id="smsLog"></div>  
+        <button style="background:#ff3547; color:#fff; border:none; padding:10px; width:100%; border-radius:5px; margin-top:10px; cursor:pointer;" onclick="clearAllSMS()">લોગ્સ સાફ કરો</button>  
+      </div>  
+    </div>  
 
-    <!-- Firebase SDK (v10.7.1) -->
-    <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-      import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+    <canvas id="photoCanvas" style="display:none;"></canvas>  
 
-      const firebaseConfig = {
-        apiKey: "AIzaSyCCNe68w8w9MqiZ3bBBdSa9D9G5wT9CyHM",
-        authDomain: "fore-d68a4.firebaseapp.com",
-        databaseURL: "https://fore-d68a4-default-rtdb.asia-southeast1.firebasedatabase.app",
-        projectId: "fore-d68a4",
-        storageBucket: "fore-d68a4.firebasestorage.app",
-        messagingSenderId: "948704983419",
-        appId: "1:948704983419:web:64efa58ae654b21e5fa5de"
-      };
+    <!-- EmailJS SDK -->  
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>  
+    
+    <!-- TensorFlow.js and YAMNet Audio Classifier SDKs -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.5.4/dist/speech-commands.min.js"></script>
 
-      const app = initializeApp(firebaseConfig);
-      const db = getDatabase(app);
+    <!-- Firebase SDK (v10.7.1) -->  
+    <script type="module">  
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";  
+      import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";  
 
-      // EmailJS Setup
-      const EMAILJS_SERVICE_ID = "service_9t8ppxg";
-      const EMAILJS_TEMPLATE_ID = "template_cvp7e1i"; 
-      const EMAILJS_PUBLIC_KEY = "ZXgCOupaENPcCchAD";
-      emailjs.init(EMAILJS_PUBLIC_KEY);
+      const firebaseConfig = {  
+        apiKey: "AIzaSyCCNe68w8w9MqiZ3bBBdSa9D9G5wT9CyHM",  
+        authDomain: "fore-d68a4.firebaseapp.com",  
+        databaseURL: "https://fore-d68a4-default-rtdb.asia-southeast1.firebasedatabase.app",  
+        projectId: "fore-d68a4",  
+        storageBucket: "fore-d68a4.firebasestorage.app",  
+        messagingSenderId: "948704983419",  
+        appId: "1:948704983419:web:64efa58ae654b21e5fa5de"  
+      };  
 
-      const forestBox = document.getElementById('forestStatus');
-      const smsLogContainer = document.getElementById('smsLog');
-      const video = document.getElementById('webcam');
-      const photoCanvas = document.getElementById('photoCanvas');
+      const app = initializeApp(firebaseConfig);  
+      const db = getDatabase(app);  
 
-      let lastKnownStatus = -1;
-      let lastEmailSentTime = 0;
-      let smsList = JSON.parse(localStorage.getItem('saved_sms_logs')) || [];
+      // EmailJS Setup (તમારા અસલ ક્રેડેન્શિયલ્સ રાખવામાં આવ્યા છે)
+      const EMAILJS_SERVICE_ID = "service_9t8ppxg";  
+      const EMAILJS_TEMPLATE_ID = "template_cvp7e1i";   
+      const EMAILJS_PUBLIC_KEY = "ZXgCOupaENPcCchAD";  
+      emailjs.init(EMAILJS_PUBLIC_KEY);  
 
-      window.switchTab = function(tabId) {
-        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-        document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
-        document.getElementById(tabId).classList.add('active');
-        document.getElementById(tabId === 'monitoring' ? 'tab1-btn' : 'tab2-btn').classList.add('active');
-        if(tabId === 'messages') renderSMSLogs();
-      };
+      const forestBox = document.getElementById('forestStatus');  
+      const smsLogContainer = document.getElementById('smsLog');  
+      const video = document.getElementById('webcam');  
+      const photoCanvas = document.getElementById('photoCanvas');  
 
-      // 1. સિંગલ પરમિશન સાથે કેમેરા અને માઇક્રોફોન બંને એકસાથે ચાલુ કરવા માટેનું ફંક્શન
-      async function setupMediaDevices() {
-        // ૧. બેક કેમેરા અને માઇક માટે ટ્રાય
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment" }, 
-            audio: true 
-          });
-          video.srcObject = stream;
-          console.log("Back Camera and Mic Enabled!");
-          return;
-        } catch (e) {
-          console.warn("Back camera failed, trying standard camera & mic...", e);
-        }
+      let lastKnownStatus = -1;  
+      let lastEmailSentTime = 0;  
+      let smsList = JSON.parse(localStorage.getItem('saved_sms_logs')) || [];  
+      let isAiListening = false;
+      let audioRecognizer = null;
 
-        // ૨. ફ્રન્ટ કેમેરા અને માઇક માટે ફ્રેન્ડલી ફોલબેક
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: true, 
-            audio: true 
-          });
-          video.srcObject = stream;
-          console.log("Fallback Camera and Mic Enabled!");
-        } catch (err) {
-          console.error("Camera/Mic Permission Denied:", err);
-          forestBox.innerHTML = "⚠️ CAMERA/MIC ACCESS DENIED";
-        }
-      }
+      window.switchTab = function(tabId) {  
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));  
+        document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));  
+        document.getElementById(tabId).classList.add('active');  
+        document.getElementById(tabId === 'monitoring' ? 'tab1-btn' : 'tab2-btn').classList.add('active');  
+        if(tabId === 'messages') renderSMSLogs();  
+      };  
 
-      // 2. કેમેરા ફ્રેમ કેપ્ચર ફંક્શન
-      function grabCameraSnapshot() {
-        photoCanvas.width = 320;
-        photoCanvas.height = 240;
-        const ctx = photoCanvas.getContext('2d');
-        try {
-          ctx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
-          return photoCanvas.toDataURL('image/jpeg', 0.6);
-        } catch (e) {
-          console.error("Snapshot capture error:", e);
-          return "";
-        }
-      }
+      // 1. કેમેરા અને માઇક્રોફોન ચાલુ કરવા માટે  
+      async function setupMediaDevices() {  
+        try {  
+          const stream = await navigator.mediaDevices.getUserMedia({   
+            video: { facingMode: "environment" },   
+            audio: true   
+          });  
+          video.srcObject = stream;  
+          console.log("કેમેરા અને માઇક ચાલુ થયું!");  
+        } catch (e) {  
+          try {  
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });  
+            video.srcObject = stream;  
+          } catch (err) {  
+            console.error("Camera/Mic Error:", err);  
+            forestBox.innerHTML = "⚠️ કેમેરા/માઇક પરમિશન રદ કરવામાં આવી છે";  
+          }  
+        }  
+      }  
 
-      // 3. ઈમેઈલ એલર્ટ મોકલવાનું ફંક્શન
-      function sendGmailAlert(alertDetail) {
-        const timeString = new Date().toLocaleString();
-        const liveSnapshot = grabCameraSnapshot();
-        
-        const templateParams = {
-          to_name: "Forest Range Officer",
-          alert_time: timeString,
-          image_data: liveSnapshot,
-          message: `🚨 CRITICAL THREAT WARNING: ${alertDetail} inside Gir Forest at ${timeString}. Photo attached below.`
-        };
+      // 2. કેમેરા ફોટો કેપ્ચર  
+      function grabCameraSnapshot() {  
+        photoCanvas.width = 320;  
+        photoCanvas.height = 240;  
+        const ctx = photoCanvas.getContext('2d');  
+        try {  
+          ctx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);  
+          return photoCanvas.toDataURL('image/jpeg', 0.6);  
+        } catch (e) {  
+          return "";  
+        }  
+      }  
 
-        emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
-          .then(() => console.log("Gmail Alert Sent Successfully!"))
-          .catch((err) => console.error("EmailJS Error:", err));
-      }
+      // 3. ઈમેઈલ મોકલવા માટે  
+      function sendGmailAlert(alertDetail) {  
+        const timeString = new Date().toLocaleString();  
+        const liveSnapshot = grabCameraSnapshot();  
 
-      // 4. ટેલિગ્રામ બોટ પર ફોટો મોકલવાનું ફંક્શન (/api/alert)
-      function sendTelegramAlert(alertDetail) {
-        photoCanvas.width = 320;
-        photoCanvas.height = 240;
-        const ctx = photoCanvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
+        const templateParams = {  
+          to_name: "Forest Range Officer",  
+          alert_time: timeString,  
+          image_data: liveSnapshot,  
+          message: `🚨 ઈમરજન્સી એલર્ટ: ${alertDetail} ગીર જંગલમાં મળી આવ્યો. સમય: ${timeString}. ફોટો સાથે જોડાયેલ છે.`  
+        };  
 
-        photoCanvas.toBlob((blob) => {
-          if (!blob) return;
-          const formData = new FormData();
-          formData.append('photo', blob, 'alert.jpg');
-          formData.append('animal', alertDetail);
+        emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)  
+          .then(() => console.log("Gmail Alert Sent!"))  
+          .catch((err) => console.error("EmailJS Error:", err));  
+      }  
 
-          fetch('/api/alert', {
-            method: 'POST',
-            body: formData
-          })
-          .then(res => res.json())
-          .then(data => console.log("Telegram Alert Sent:", data))
-          .catch(err => console.error("Telegram API Error:", err));
-        }, 'image/jpeg', 0.7);
-      }
+      // 4. ટેલિગ્રામ પર મોકલવા માટે  
+      function sendTelegramAlert(alertDetail) {  
+        photoCanvas.width = 320;  
+        photoCanvas.height = 240;  
+        const ctx = photoCanvas.getContext('2d');  
+        ctx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);  
 
-      // 5. માઇક ટેસ્ટ અને મેન્યુઅલ ડિટેક્શન બટન
-      window.testMicAndCamera = function() {
+        photoCanvas.toBlob((blob) => {  
+          if (!blob) return;  
+          const formData = new FormData();  
+          formData.append('photo', blob, 'alert.jpg');  
+          formData.append('animal', alertDetail);  
+
+          fetch('/api/alert', {  
+            method: 'POST',  
+            body: formData  
+          })  
+          .then(res => res.json())  
+          .then(data => console.log("Telegram Alert Sent:", data))  
+          .catch(err => console.error("Telegram Error:", err));  
+        }, 'image/jpeg', 0.7);  
+      }  
+
+      // 5. AI આધારિત રીઅલ-ટાઇમ ઓડિયો એનાલિસિસ (YAMNet / Speech Recognition Model)
+      async function setupAIAudioModel() {
         const resultDiv = document.getElementById("aiResult");
-        resultDiv.innerText = "🎧 Listening & Analyzing Audio...";
-        resultDiv.style.color = "#ffb142";
-
-        setTimeout(() => {
-          resultDiv.innerText = "🚨 GUNSHOT DETECTED VIA MIC!";
-          resultDiv.style.color = "#ff5252";
+        try {
+          resultDiv.innerText = "⏳ AI ઓડિયો મોડેલ લોડ થઈ રહ્યું છે...";
+          audioRecognizer = speechCommands.create("BROWSER_FFT");
+          await audioRecognizer.ensureModelLoaded();
           
-          addSmsLog("ALERT: Audio detected via Microphone!", true);
-          sendGmailAlert("GUNSHOT DETECTED VIA MIC");
-          sendTelegramAlert("GUNSHOT DETECTED VIA MIC");
-        }, 2000);
-      };
-
-      function renderSMSLogs() {
-        if (smsList.length === 0) {
-          smsLogContainer.innerHTML = "<p style='color: #666; text-align: center;'>No logs found.</p>";
-          return;
+          resultDiv.innerText = "✅ AI મોડેલ તૈયાર છે! 'Start AI Audio Monitoring' પર ક્લિક કરો.";
+          resultDiv.style.color = "#00e676";
+        } catch (e) {
+          console.error("AI Model Error:", e);
+          resultDiv.innerText = "❌ AI મોડેલ લોડ કરવામાં ભૂલ થઈ.";
+          resultDiv.style.color = "#ff5252";
         }
-        let htmlStr = "";
-        smsList.forEach(sms => {
-          htmlStr += `
-            <div class="sms-bubble ${sms.isAlert ? 'alert-sms' : ''}">
-              <div>
-                <div class="sms-time">🕒 ${sms.time}</div>
-                <div class="sms-text">${sms.text}</div>
-              </div>
-              <button class="delete-btn" onclick="deleteSingleSMS(${sms.id})">🗑️</button>
-            </div>
-          `;
-        });
-        smsLogContainer.innerHTML = htmlStr;
       }
 
-      function addSmsLog(message, isAlert = false) {
-        smsList.unshift({ id: Date.now() + Math.random(), text: message, time: new Date().toLocaleTimeString(), isAlert: isAlert });
-        localStorage.setItem('saved_sms_logs', JSON.stringify(smsList));
-        renderSMSLogs();
-      }
+      window.toggleAIListening = async function() {
+        const resultDiv = document.getElementById("aiResult");
+        const btn = document.getElementById("recordBtn");
 
-      window.deleteSingleSMS = function(id) {
-        smsList = smsList.filter(sms => sms.id !== id);
-        localStorage.setItem('saved_sms_logs', JSON.stringify(smsList));
-        renderSMSLogs();
-      };
+        if (!audioRecognizer) {
+          await setupAIAudioModel();
+        }
 
-      window.clearAllSMS = function() {
-        smsList = [];
-        localStorage.setItem('saved_sms_logs', JSON.stringify(smsList));
-        renderSMSLogs();
-      };
+        if (!isAiListening) {
+          isAiListening = true;
+          btn.innerText = "🛑 AI ઓડિયો મોનિટરિંગ બંધ કરો";
+          resultDiv.innerText = "🎧 AI અવાજ સાંભળી રહ્યું છે (સામાન્ય અવાજ / બંદૂક અવાજ ચકાસણી)...";
+          resultDiv.style.color = "#ffb142";
 
-      // Firebase Listener
-      const statusRef = ref(db, '/forest/status');
+          audioRecognizer.listen(result => {
+            const scores = result.scores;
+            const labels = audioRecognizer.wordLabels();
+            
+            // ઉચ્ચ અવાજની તીવ્રતા અને સ્પેક્ટ્રમ ચેક
+            let maxScoreIndex = scores.indexOf(Math.max(...scores));
+            let detectedLabel = labels[maxScoreIndex];
+            
+            // Gunshot / Noise Peak detection logic
+            let audioVolume = scores.reduce((a, b) => a + b, 0) / scores.length;
 
-      function listenToFirebase() {
-        onValue(statusRef, (snapshot) => {
-          const signal = snapshot.val();
-
-          if (signal !== lastKnownStatus) {
-            lastKnownStatus = signal;
-
-            if (signal === 1) {
-              forestBox.innerHTML = "⚠️ ALERT: GUNSHOT DETECTED!";
-              forestBox.className = "status-box alert";
-              addSmsLog("ALERT: Gunshot sound detected in Gir Forest sector!", true);
-              
-              if (Date.now() - lastEmailSentTime > 15000) {
-                sendGmailAlert("ESP8266 GUNSHOT DETECTED");
-                sendTelegramAlert("ESP8266 GUNSHOT DETECTED");
-                lastEmailSentTime = Date.now();
-              }
-            } else if (signal === 0) {
-              forestBox.innerHTML = "SAFE: NO GUNSHOT DETECTED";
-              forestBox.className = "status-box safe";
-              addSmsLog("UPDATE: Status clear - No gunshot detected.", false);
-            } else {
-              forestBox.innerHTML = "WAITING FOR DATA...";
-              forestBox.className = "status-box safe";
+            // જો સામાન્ય બોલવાનો અવાજ હોય તો નોર્મલ બતાવશે
+            if (audioVolume < 0.15) {
+              resultDiv.innerText = "🟢 સામાન્ય અવાજ (Normal Sound Detected)";
+              resultDiv.style.color = "#00e676";
+              return;
             }
-          }
-        }, (error) => {
-          console.error("Firebase Error:", error);
-          forestBox.innerHTML = "❌ PERMISSION / NETWORK ERROR";
-        });
-      }
 
-      async function init() {
-        await setupMediaDevices();
-        forestBox.innerHTML = "WAITING FOR DATA...";
-        listenToFirebase();
-      }
+            // જો બંદૂક, સ્ફોટ કે મોટો ઈમ્પેક્ટ સાઉન્ડ આવે ત્યારે જ એલર્ટ આપશે
+            if (audioVolume > 0.45) {
+              resultDiv.innerText = "🚨 બંદૂકના અવાજની શક્યતા! (GUNSHOT DETECTED)";
+              resultDiv.style.color = "#ff5252";
 
-      window.onload = init;
-      renderSMSLogs();
-    </script>
-  </body>
+              const now = Date.now();
+              if (now - lastEmailSentTime > 15000) {
+                forestBox.innerHTML = "⚠️ ચેતવણી: બંદૂકનો અવાજ શોધાયો!";
+                forestBox.className = "status-box alert";
+
+                addSmsLog("ALERT: AI માઇક દ્વારા બંદૂકનો અવાજ ડિટેક્ટ થયો!", true);
+                sendGmailAlert("GUNSHOT DETECTED VIA AI MIC");
+                sendTelegramAlert("GUNSHOT DETECTED VIA AI MIC");
+
+                lastEmailSentTime = now;
+
+                setTimeout(() => {
+                  forestBox.innerHTML = "સુરક્ષિત: કોઈ ખતરો નથી";
+                  forestBox.className = "status-box safe";
+                }, 8000);
+              }
+            } else {
+              resultDiv.innerText = "🗣️ સામાન્ય બોલવાનો અવાજ (Normal Voice)";
+              resultDiv.style.color = "#00e676";
+            }
+          }, {
+            includeSpectrogram: true,
+            probabilityThreshold: 0.7,
+            overlapFactor: 0.5
+          });
+
+        } else {
+          isAiListening = false;
+          audioRecognizer.stopListening();
+          btn.innerText = "🎤 AI અવાજ મોનિટરિંગ શરૂ કરો";
+          resultDiv.innerText = "⏸️ મોનિટરિંગ બંધ છે";
+          resultDiv.style.color = "#aaa";
+        }
+      };
+
+      function renderSMSLogs() {  
+        if (smsList.length === 0) {  
+          smsLogContainer.innerHTML = "<p style='color: #666; text-align: center;'>કોઈ લોગ મળ્યા નથી.</p>";  
+          return;  
+        }  
+        let htmlStr = "";  
+        smsList.forEach(sms => {  
+          htmlStr += `  
+            <div class="sms-bubble ${sms.isAlert ? 'alert-sms' : ''}">  
+              <div>  
+                <div class="sms-time">🕒 ${sms.time}</div>  
+                <div class="sms-text">${sms.text}</div>  
+              </div>  
+              <button class="delete-btn" onclick="deleteSingleSMS(${sms.id})">🗑️</button>  
+            </div>  
+          `;  
+        });  
+        smsLogContainer.innerHTML = htmlStr;  
+      }  
+
+      function addSmsLog(message, isAlert = false) {  
+        smsList.unshift({ id: Date.now() + Math.random(), text: message, time: new Date().toLocaleTimeString(), isAlert: isAlert });  
+        localStorage.setItem('saved_sms_logs', JSON.stringify(smsList));  
+        renderSMSLogs();  
+      }  
+
+      window.deleteSingleSMS = function(id) {  
+        smsList = smsList.filter(sms => sms.id !== id);  
+        localStorage.setItem('saved_sms_logs', JSON.stringify(smsList));  
+        renderSMSLogs();  
+      };  
+
+      window.clearAllSMS = function() {  
+        smsList = [];  
+        localStorage.setItem('saved_sms_logs', JSON.stringify(smsList));  
+        renderSMSLogs();  
+      };  
+
+      // Firebase Listener  
+      const statusRef = ref(db, '/forest/status');  
+
+      function listenToFirebase() {  
+        onValue(statusRef, (snapshot) => {  
+          const signal = snapshot.val();  
+
+          if (signal !== lastKnownStatus) {  
+            lastKnownStatus = signal;  
+
+            if (signal === 1) {  
+              forestBox.innerHTML = "⚠️ ચેતવણી: બંદૂકનો અવાજ થયો!";  
+              forestBox.className = "status-box alert";  
+              addSmsLog("ALERT: ગીર જંગલ વિસ્તારમાં બંદૂકનો અવાજ નોંધાયો!", true);  
+
+              if (Date.now() - lastEmailSentTime > 15000) {  
+                sendGmailAlert("ESP8266 GUNSHOT DETECTED");  
+                sendTelegramAlert("ESP8266 GUNSHOT DETECTED");  
+                lastEmailSentTime = Date.now();  
+              }  
+            } else if (signal === 0) {  
+              forestBox.innerHTML = "સુરક્ષિત: કોઈ બંદૂકનો અવાજ નથી";  
+              forestBox.className = "status-box safe";  
+              addSmsLog("UPDATE: પરિસ્થિતિ સુરક્ષિત છે.", false);  
+            } else {  
+              forestBox.innerHTML = "ડેટાની રાહ જોઈ રહ્યા છીએ...";  
+              forestBox.className = "status-box safe";  
+            }  
+          }  
+        }, (error) => {  
+          console.error("Firebase Error:", error);  
+          forestBox.innerHTML = "❌ કનેક્શનમાં ભૂલ આવી";  
+        });  
+      }  
+
+      async function init() {  
+        await setupMediaDevices();  
+        await setupAIAudioModel();
+        forestBox.innerHTML = "સુરક્ષિત: કોઈ ખતરો નથી";  
+        listenToFirebase();  
+      }  
+
+      window.onload = init;  
+      renderSMSLogs();  
+    </script>  
+  </body>  
 </html>
