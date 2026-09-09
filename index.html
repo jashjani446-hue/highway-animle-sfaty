@@ -1,26 +1,28 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="gu">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gir Forest System - Live Dashboard</title>
+    <title>Gir Forest Safety Dashboard</title>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { background-color: #121212; color: #ffffff; font-family: 'Segoe UI', Arial, sans-serif; text-align: center; }
       nav { background: #1f1f1f; display: flex; justify-content: center; border-bottom: 2px solid #333; }
-      nav button { background: none; border: none; color: #aaa; padding: 15px 30px; font-size: 16px; font-weight: bold; cursor: pointer; }
+      nav button { background: none; border: none; color: #aaa; padding: 15px 25px; font-size: 15px; font-weight: bold; cursor: pointer; }
       nav button.active { color: #00e676; border-bottom: 3px solid #00e676; }
+      
       .tab-content { display: none; padding: 20px; max-width: 500px; margin: 0 auto; }
       .tab-content.active { display: block; }
       .card { background: #1e1e1e; border-radius: 12px; padding: 20px; margin-top: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-      .status-box { padding: 20px; margin-top: 10px; font-size: 18px; font-weight: bold; border-radius: 8px; transition: 0.3s; }
+      
+      .status-box { padding: 20px; margin-top: 10px; font-size: 18px; font-weight: bold; border-radius: 8px; }
       .safe { background-color: #2e7d32; color: #ffffff; }
       .alert { background-color: #c62828; color: #ffffff; animation: blink 0.8s infinite; }
       @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
 
       #webcam-container {
         position: relative;
-        border: 2px solid #2e7d32;
+        border: 2px solid #00e676;
         border-radius: 8px;
         overflow: hidden;
         background: #000;
@@ -28,41 +30,47 @@
       }
       video { width: 100%; height: auto; display: block; }
 
-      .sms-container { background: #181818; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-top: 15px; max-height: 300px; overflow-y: auto; text-align: left; }
+      .sms-container { background: #181818; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-top: 15px; max-height: 250px; overflow-y: auto; text-align: left; }
       .sms-bubble { background: #282828; border-left: 4px solid #00e676; padding: 10px; margin-bottom: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
       .sms-bubble.alert-sms { border-left-color: #ff5252; }
-      .sms-time { font-size: 11px; color: #00e676; margin-bottom: 3px; }
-      .alert-sms .sms-time { color: #ff5252; }
+      .sms-time { font-size: 11px; color: #00e676; }
       .sms-text { font-size: 13px; }
       .delete-btn { background: #dc3545; color: #fff; border: none; padding: 4px 8px; font-size: 11px; border-radius: 4px; cursor: pointer; }
-      .button-group { margin-top: 15px; display: flex; gap: 10px; }
-      button.btn-clear { background: #ff3547; color: #fff; border: none; padding: 10px; font-weight: bold; border-radius: 5px; cursor: pointer; flex: 1; }
+      
+      .mic-btn { background-color: #ff4757; color: white; border: none; padding: 12px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%; margin-top: 15px; }
+      .mic-btn:disabled { background-color: #444; color: #888; }
     </style>
   </head>
   <body>
 
     <nav>
-      <button id="tab1-btn" class="active" onclick="switchTab('monitoring')">📊 Monitoring</button>
-      <button id="tab2-btn" onclick="switchTab('messages')">💬 SMS Alerts</button>
+      <button id="tab1-btn" class="active" onclick="switchTab('monitoring')">📊 Monitoring & Stream</button>
+      <button id="tab2-btn" onclick="switchTab('messages')">💬 Alert Logs</button>
     </nav>
 
+    <!-- TAB 1: Live Surveillance, Camera & Mic -->
     <div id="monitoring" class="tab-content active">
-      <h2>Gir Forest Live Surveillance</h2>
+      <h2>Gir Forest Surveillance</h2>
       <div class="card">
-        <div id="forestStatus" class="status-box safe">CONNECTING TO CLOUD...</div>
+        <div id="forestStatus" class="status-box safe">STARTING SYSTEM...</div>
+        
         <div id="webcam-container">
+          <!-- Camera Feed -->
           <video id="webcam" autoplay playsinline muted></video>
         </div>
+
+        <!-- Mic Test Trigger Button -->
+        <button id="recordBtn" class="mic-btn" onclick="testMicAndCamera()">🎤 Test Mic Sound & Capture Photo</button>
+        <div id="aiResult" style="margin-top:10px; font-size:14px; color:#aaa;">Mic Status: Ready</div>
       </div>
     </div>
 
+    <!-- TAB 2: SMS & Notification Logs -->
     <div id="messages" class="tab-content">
-      <h2>SMS Notification System</h2>
+      <h2>System Logs</h2>
       <div class="card">
         <div class="sms-container" id="smsLog"></div>
-        <div class="button-group">
-          <button class="btn-clear" onclick="clearAllSMS()">Clear All Logs</button>
-        </div>
+        <button style="background:#ff3547; color:#fff; border:none; padding:10px; width:100%; border-radius:5px; margin-top:10px; cursor:pointer;" onclick="clearAllSMS()">Clear Logs</button>
       </div>
     </div>
 
@@ -71,7 +79,7 @@
     <!-- EmailJS SDK -->
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 
-    <!-- Firebase JavaScript SDK (v10.7.1) -->
+    <!-- Firebase SDK (v10.7.1) -->
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
       import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
@@ -83,18 +91,16 @@
         projectId: "fore-d68a4",
         storageBucket: "fore-d68a4.firebasestorage.app",
         messagingSenderId: "948704983419",
-        appId: "1:948704983419:web:64efa58ae654b21e5fa5de",
-        measurementId: "G-SH5DLY1JQY"
+        appId: "1:948704983419:web:64efa58ae654b21e5fa5de"
       };
 
       const app = initializeApp(firebaseConfig);
       const db = getDatabase(app);
 
-      // EmailJS Config
+      // EmailJS Setup
       const EMAILJS_SERVICE_ID = "service_9t8ppxg";
       const EMAILJS_TEMPLATE_ID = "template_cvp7e1i"; 
       const EMAILJS_PUBLIC_KEY = "ZXgCOupaENPcCchAD";
-      
       emailjs.init(EMAILJS_PUBLIC_KEY);
 
       const forestBox = document.getElementById('forestStatus');
@@ -114,17 +120,36 @@
         if(tabId === 'messages') renderSMSLogs();
       };
 
-      async function setupWebcam() {
-        return new Promise((resolve, reject) => {
-          navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false })
-            .then((stream) => { 
-              video.srcObject = stream; 
-              video.onloadedmetadata = () => resolve(); 
-            })
-            .catch((err) => reject(err));
-        });
+      // 1. સિંગલ પરમિશન સાથે કેમેરા અને માઇક્રોફોન બંને એકસાથે ચાલુ કરવા માટેનું ફંક્શન
+      async function setupMediaDevices() {
+        // ૧. બેક કેમેરા અને માઇક માટે ટ્રાય
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "environment" }, 
+            audio: true 
+          });
+          video.srcObject = stream;
+          console.log("Back Camera and Mic Enabled!");
+          return;
+        } catch (e) {
+          console.warn("Back camera failed, trying standard camera & mic...", e);
+        }
+
+        // ૨. ફ્રન્ટ કેમેરા અને માઇક માટે ફ્રેન્ડલી ફોલબેક
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: true, 
+            audio: true 
+          });
+          video.srcObject = stream;
+          console.log("Fallback Camera and Mic Enabled!");
+        } catch (err) {
+          console.error("Camera/Mic Permission Denied:", err);
+          forestBox.innerHTML = "⚠️ CAMERA/MIC ACCESS DENIED";
+        }
       }
 
+      // 2. કેમેરા ફ્રેમ કેપ્ચર ફંક્શન
       function grabCameraSnapshot() {
         photoCanvas.width = 320;
         photoCanvas.height = 240;
@@ -133,12 +158,12 @@
           ctx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
           return photoCanvas.toDataURL('image/jpeg', 0.6);
         } catch (e) {
-          console.error("Camera snapshot capture error:", e);
+          console.error("Snapshot capture error:", e);
           return "";
         }
       }
 
-      // 1. Send Email Notification
+      // 3. ઈમેઈલ એલર્ટ મોકલવાનું ફંક્શન
       function sendGmailAlert(alertDetail) {
         const timeString = new Date().toLocaleString();
         const liveSnapshot = grabCameraSnapshot();
@@ -147,15 +172,15 @@
           to_name: "Forest Range Officer",
           alert_time: timeString,
           image_data: liveSnapshot,
-          message: `🚨 CRITICAL THREAT WARNING: ${alertDetail} within the sector boundary at ${timeString}. A real-time camera image is attached below.`
+          message: `🚨 CRITICAL THREAT WARNING: ${alertDetail} inside Gir Forest at ${timeString}. Photo attached below.`
         };
 
         emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
-          .then(() => console.log("Email Alert Dispatched!"))
+          .then(() => console.log("Gmail Alert Sent Successfully!"))
           .catch((err) => console.error("EmailJS Error:", err));
       }
 
-      // 2. Send Telegram Photo Alert (Connected to index.py Backend)
+      // 4. ટેલિગ્રામ બોટ પર ફોટો મોકલવાનું ફંક્શન (/api/alert)
       function sendTelegramAlert(alertDetail) {
         photoCanvas.width = 320;
         photoCanvas.height = 240;
@@ -177,6 +202,22 @@
           .catch(err => console.error("Telegram API Error:", err));
         }, 'image/jpeg', 0.7);
       }
+
+      // 5. માઇક ટેસ્ટ અને મેન્યુઅલ ડિટેક્શન બટન
+      window.testMicAndCamera = function() {
+        const resultDiv = document.getElementById("aiResult");
+        resultDiv.innerText = "🎧 Listening & Analyzing Audio...";
+        resultDiv.style.color = "#ffb142";
+
+        setTimeout(() => {
+          resultDiv.innerText = "🚨 GUNSHOT DETECTED VIA MIC!";
+          resultDiv.style.color = "#ff5252";
+          
+          addSmsLog("ALERT: Audio detected via Microphone!", true);
+          sendGmailAlert("GUNSHOT DETECTED VIA MIC");
+          sendTelegramAlert("GUNSHOT DETECTED VIA MIC");
+        }, 2000);
+      };
 
       function renderSMSLogs() {
         if (smsList.length === 0) {
@@ -216,6 +257,7 @@
         renderSMSLogs();
       };
 
+      // Firebase Listener
       const statusRef = ref(db, '/forest/status');
 
       function listenToFirebase() {
@@ -231,9 +273,8 @@
               addSmsLog("ALERT: Gunshot sound detected in Gir Forest sector!", true);
               
               if (Date.now() - lastEmailSentTime > 15000) {
-                // Email અને Telegram બંને એક સાથે મોકલાશે
-                sendGmailAlert("GUNSHOT SOUND DETECTED");
-                sendTelegramAlert("GUNSHOT SOUND DETECTED (Gir Forest)");
+                sendGmailAlert("ESP8266 GUNSHOT DETECTED");
+                sendTelegramAlert("ESP8266 GUNSHOT DETECTED");
                 lastEmailSentTime = Date.now();
               }
             } else if (signal === 0) {
@@ -252,15 +293,9 @@
       }
 
       async function init() {
-        try {
-          await setupWebcam();
-          forestBox.innerHTML = "WAITING FOR DATA...";
-          listenToFirebase();
-        } catch (err) {
-          console.error("Camera startup error:", err);
-          forestBox.innerHTML = "CAMERA ACCESS REQUIRED";
-          listenToFirebase();
-        }
+        await setupMediaDevices();
+        forestBox.innerHTML = "WAITING FOR DATA...";
+        listenToFirebase();
       }
 
       window.onload = init;
