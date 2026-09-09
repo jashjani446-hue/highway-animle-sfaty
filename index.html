@@ -40,7 +40,7 @@
 
         document.getElementById('startBtn').addEventListener('click', async () => {
             if (isListening) return;
-            addLog("તાળી ફિલ્ટર એનાલાઇઝર લોડ થઈ રહ્યું છે...");
+            addLog("બટન ક્લિક સક્સેસ! ફિલ્ટર એનાલાઇઝર લોડ થઈ રહ્યું છે...");
             startAdvancedFilter();
         });
 
@@ -69,35 +69,35 @@
                     analyser.getByteFrequencyData(dataArray);
                     
                     // ૧. ગનશોટનો બેઝ (Low/Explosion Frequency: index 2 to 15)
-                    int bassSum = 0;
-                    for (int i = 2; i < 15; i++) {
+                    let bassSum = 0;
+                    for (let i = 2; i < 15; i++) {
                         bassSum += dataArray[i];
                     }
-                    float bassAvg = bassSum / 13.0;
+                    let bassAvg = bassSum / 13.0;
 
                     // ૨. ગનશોટની શાર્પનેસ (High-Pitch: index 80 to 220)
-                    int highSum = 0;
-                    for (int i = 80; i < 220; i++) {
+                    let highSum = 0;
+                    for (let i = 80; i < 220; i++) {
                         highSum += dataArray[i];
                     }
-                    float highAvg = highSum / 140.0;
+                    let highAvg = highSum / 140.0;
 
                     // કુલ અવાજની તીવ્રતા
-                    float totalVolume = (bassAvg + highAvg) / 2.0;
+                    let totalVolume = (bassAvg + highAvg) / 2.0;
 
-                    // 🎯 તાળી અને ગનશોટ અલગ કરવાનું લોજિક:
-                    // તાળીમાં માત્ર શાર્પનેસ (High-Pitch) હોય છે, બેઝ (Bass) નથી હોતો.
-                    // બંદૂકના અવાજમાં ધડાકાને કારણે Bass અને High બંને ખુબ ઊંચા હોય છે.
-                    // જો હજુ પણ તાળી પકડાતી હોય, તો નીચેની 125 ની વેલ્યુ વધારીને 140 કે 150 કરી દેવી.
-                    if (bassAvg > 125 && highAvg > 110 && totalVolume > 120) {
+                    // 🎯 તાળી ફિલ્ટર લોજિક:
+                    // જો હાઈ પિચ અને બેઝ બંને ૧૦૦ થી વધુ તીવ્ર હોય (બંદૂકનો ધડાકો) તો જ એલાર્મ થશે.
+                    // જો તાળી પાડવા પર હજુ પણ એલાર્મ થાય, તો નીચેની bassAvg > 100 ની વેલ્યુ વધારીને 120 કે 130 કરી દેવી.
+                    if (bassAvg > 100 && highAvg > 100 && totalVolume > 110) {
                         triggerAlerts(totalVolume);
                     }
-                }, 80); // 80ms ની ઝડપે સતત સ્કેનિંગ
+                }, 80); 
 
             } catch (err) {
                 document.getElementById('statusText').innerText = "ભૂલ: માઈક ના મળ્યો!";
                 document.getElementById('statusText').style.color = "red";
                 addLog("ભૂલ: માઈક પરમિશન આપો.");
+                console.error(err);
             }
         }
 
@@ -105,7 +105,7 @@
             document.getElementById('alertBox').style.display = "block";
             document.getElementById('alertBox').innerText = `⚠️ GUNSHOT MATCHED! (Intensity: ${Math.round(volume)})`;
             
-            addLog(`🚨 તાળી ફિલ્ટર પાસ! આ સાચો ગનશોટ છે (તીવ્રતા: ${Math.round(volume)})! એલાર્મ ફાયર થયા.`);
+            addLog(`🚨 તાળી ફિલ્ટર પાસ! આ સાચો ગનશોટ છે! એલાર્મ ફાયર થયા.`);
             
             sendGmailNotification();
             sendTelegramMessage();
@@ -115,7 +115,6 @@
             }, 5000);
         }
 
-        // ======= તમારા ઓરિજિનલ એલાર્મ ફંક્શન્સ =======
         function sendGmailNotification() { console.log("Gmail Sent."); }
         function sendTelegramMessage() { console.log("Telegram Sent."); }
     </script>
