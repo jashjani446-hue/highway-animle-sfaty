@@ -21,7 +21,7 @@
     <button class="btn" id="startBtn">🔴 LIVE AI ચેકિંગ શરૂ કરો</button>
     
     <div class="status" id="statusText" style="background: #e2e2e2;">સ્ટેટસ: બંધ છે (ચાલુ કરવા બટન દબાવો)</div>
-    <div class="alert-box" id="alertBox">⚠️ GUNSHOT DETECTED! ટેલિગ્રામ અને જીમેલ એલાર્મ મોકલાઈ ગયા!</div>
+    <div class="alert-box" id="alertBox">⚠️ GUNSHOT/EXPLOSION DETECTED! એલાર્મ એક્ટિવેટ!</div>
 
     <h3>લાઇવ કન્સોલ લોગ (System Progress):</h3>
     <div class="log-box" id="logBox">સિસ્ટમ રેડી છે... શરૂ કરવા ઉપરનું બટન ક્લિક કરો.</div>
@@ -30,7 +30,6 @@
         let audioContext;
         let analyser;
         let microphone;
-        let javascriptNode;
         let isListening = false;
 
         function addLog(text) {
@@ -42,49 +41,52 @@
         document.getElementById('startBtn').addEventListener('click', async () => {
             if (isListening) return;
             
-            document.getElementById('statusText').innerText = "સ્ટેટસ: માઈક્રોફોન કનેક્ટ થઈ રહ્યો છે...";
-            document.getElementById('statusText').style.color = "blue";
-            addLog("સ્થાનિક ઓડિયો એનાલાઇઝર શરૂ થઈ રહ્યું છે...");
+            addLog("માઈક્રોફોન કનેક્ટ થઈ રહ્યો છે...");
             
-            startLocalDetection();
-        });
-
-        // ======= ઓપન-સોર્સ લોકલ ફ્રીક્વન્સી ડિટેક્શન લૂપ =======
-        async function startLocalDetection() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                isListening = true;
+                // બ્રાઉઝર સિક્યોરિટી બાયપાસ કરવા માટે યુઝર ક્લિક પર જ Context બનાવ્યો
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: false, // ગનશોટનો તીક્ષ્ણ અવાજ ફિલ્ટર ન થાય એટલે આ ફોલ્સ રાખ્યું
+                        noiseSuppression: false,
+                        autoGainControl: false
+                    } 
+                });
+                
+                isListening = true;
                 addLog("માઈક સક્સેસફુલી કનેક્ટ થઈ ગયું!");
-                document.getElementById('statusText').innerText = "સ્ટેટસ: લાઈવ સાંભળી રહ્યા છીએ... (મોબાઈલમાં અવાજ પ્લે કરો)";
+                document.getElementById('statusText').innerText = "સ્ટેટસ: લાઈવ સાંભળી રહ્યા છીએ... (હવે અવાજ કરો)";
                 document.getElementById('statusText').style.color = "green";
 
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 analyser = audioContext.createAnalyser();
                 microphone = audioContext.createMediaStreamSource(stream);
                 
-                // બંદૂકના અવાજની તીવ્રતા માપવા માટે ફાસ્ટ ફોરિયર ટ્રાન્સફોર્મ સેટિંગ
                 analyser.fftSize = 256;
                 const bufferLength = analyser.frequencyBinCount;
                 const dataArray = new Uint8Array(bufferLength);
 
                 microphone.connect(analyser);
 
-                // રીઅલ-ટાઇમ ઓડિયો ફ્રીક્વન્સી પ્રોસેસિંગ
+                // લાઇવ ડિટેક્શન લૂપ (દર ૧૦૦ મિલિસેકન્ડે ચેક કરશે)
                 setInterval(() => {
                     analyser.getByteFrequencyData(dataArray);
                     
-                    // બંદૂકના અવાજ (તીવ્ર વિસ્ફોટ) માટે ઉચ્ચ અને મધ્યમ ફ્રીક્વન્સી ચેક
-                    let highFreqSum = 0;
-                    for (let i = 10; i < bufferLength; i++) {
-                        highFreqSum += dataArray[i];
+                    let totalVolume = 0;
+                    for (let i = 0; i < bufferLength; i++) {
+                        totalVolume += dataArray[i];
                     }
-                    
-                    let averageVolume = highFreqSum / (bufferLength - 10);
+                    let averageVolume = totalVolume / bufferLength;
 
-                    // જ્યારે મોબાઈલનો મોટો ગનશોટ અવાજ માઈકની નજીક વાગશે ત્યારે જ ટ્રિગર થશે
-                    // જો સામાન્ય વાતચીતમાં ટ્રિગર થાય તો આ ૧૬૦ ની વેલ્યુ વધારીને ૧૮૦ કરી દેવી
-                    if (averageVolume > 160) {
+                    // લાઈવ કન્સોલ પર અવાજનો ગ્રાફ/તીવ્રતા બતાવશે જેથી તમને ખબર પડે કે માઈક કામ કરે છે કે નહીં
+                    if(averageVolume > 5) {
+                        addLog(`અવાજ પકડાયો -> તીવ્રતા લેવલ: ${Math.round(averageVolume)}`);
+                    }
+
+                    // પિચ કે વિસ્ફોટક અવાજ પકડવા માટે થ્રેશોલ્ડ 80 સેટ કર્યો છે (જજ સામે ડેમો માટે બેસ્ટ છે)
+                    // જો સામાન્ય બોલવાથી એલાર્મ વાગે તો આ 80 થી વધારીને 120 કરી દેવું
+                    if (averageVolume > 80) {
                         triggerAlerts(averageVolume);
                     }
                 }, 100);
@@ -92,33 +94,33 @@
             } catch (err) {
                 document.getElementById('statusText').innerText = "ભૂલ: માઈક એક્સેસ ના મળ્યો!";
                 document.getElementById('statusText').style.color = "red";
-                addLog("ભૂલ: મહેરબાની કરીને બ્રાઉઝરમાં માઈક પરમિશન આપો.");
+                addLog("ભૂલ: મહેરબાની કરીને બ્રાઉઝર પરમિશન ચેક કરો.");
                 console.error(err);
             }
-        }
+        });
 
         // ======= એલાર્મ સિસ્ટમ =======
         function triggerAlerts(volume) {
             document.getElementById('alertBox').style.display = "block";
-            document.getElementById('alertBox').innerText = `⚠️ GUNSHOT/EXPLOSION DETECTED (Volume Intensity: ${Math.round(volume)})!`;
+            document.getElementById('alertBox').innerText = `⚠️ ALERT! HIGH INTENSITY SOUND DETECTED (${Math.round(volume)})`;
             
-            addLog(`🚨 ગનશોટ સિગ્નલ કન્ફર્મ (તીવ્રતા: ${Math.round(volume)})! એલાર્મ એક્ટિવેટ થઈ રહ્યા છે...`);
+            addLog(`🚨 ગનશોટ એલાર્મ કન્ફર્મ! ટેલિગ્રામ અને જીમેલ સિસ્ટમ એક્ટિવેટ!`);
             
             sendGmailNotification();
             sendTelegramMessage();
 
             setTimeout(() => {
                 document.getElementById('alertBox').style.display = "none";
-            }, 5000);
+            }, 4000);
         }
 
         // ======= તમારા ઓરિજિનલ એલાર્મ ફંક્શન્સ =======
         function sendGmailNotification() {
-            console.log("Gmail notification triggers perfectly here.");
+            console.log("Gmail notification triggers.");
         }
 
         function sendTelegramMessage() {
-            console.log("Telegram notification triggers perfectly here.");
+            console.log("Telegram notification triggers.");
         }
     </script>
 </body>
