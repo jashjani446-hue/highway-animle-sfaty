@@ -10,7 +10,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # Load environment variables for security
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8560832618:AAFxHDrVvAEHDR1zKUtK1glQq0RWMsYrWXk")
-ADMIN_PASSWORD = os.getenv("jashjani")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "jashjani")
 FIREBASE_BASE_URL = os.getenv(
     "FIREBASE_BASE_URL", 
     "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian"
@@ -102,7 +102,6 @@ def get_active_recipients():
     recipients = set()
     now = time.time()
 
-    # Read base state in one fetch to minimize network calls
     root_data = get_firebase_data("")
     if not isinstance(root_data, dict):
         return []
