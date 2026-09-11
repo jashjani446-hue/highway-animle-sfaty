@@ -163,10 +163,30 @@
       document.getElementById('homePage').classList.add('active-page');
     };
 
+    // Base64 ડેટાને સીધા જ Blob માં કન્વર્ટ કરવાનું હેલ્પર ફંક્શન
+    function dataURLtoBlob(dataurl) {
+      try {
+        let arr = dataurl.split(','),
+            mime = arr[0].match(/:(.*?);/)[1],
+            bstr = atob(arr[1]), 
+            n = bstr.length, 
+            u8arr = new Uint8Array(n);
+        while(n--){
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new Blob([u8arr], {type:mime});
+      } catch(e) {
+        console.error("DataURL to Blob error:", e);
+        return null;
+      }
+    }
+
     function grabSnapshot(videoElement) {
       const photoCanvas = document.getElementById('photoCanvas');
-      photoCanvas.width = 640;
-      photoCanvas.height = 480;
+      const w = videoElement.videoWidth || 640;
+      const h = videoElement.videoHeight || 480;
+      photoCanvas.width = w;
+      photoCanvas.height = h;
       const ctx = photoCanvas.getContext('2d');
       try {
         ctx.drawImage(videoElement, 0, 0, photoCanvas.width, photoCanvas.height);
@@ -176,34 +196,33 @@
       }
     }
 
-    // 📩 Python Backend પર Telegram Photo Alert મોકલવાનું નવું ફંક્શન
+    // 📩 Python Backend પર Telegram Photo Alert મોકલવાનું ફંક્શન
     function sendTelegramPhotoAlert(type, videoElem) {
       const liveSnapshot = grabSnapshot(videoElem);
       if (!liveSnapshot) return;
 
-      fetch(liveSnapshot)
-        .then(res => res.blob())
-        .then(blob => {
-          const formData = new FormData();
-          formData.append('photo', blob, 'alert_snapshot.jpg');
+      const blob = dataURLtoBlob(liveSnapshot);
+      if (!blob) return;
 
-          let endpoint = "";
-          if (type === 'GUNSHOT') {
-            endpoint = `${BACKEND_URL}/api/forest-alert`;
-            formData.append('label', 'GUNSHOT DETECTED (બંદૂકનો અવાજ)');
-          } else {
-            endpoint = `${BACKEND_URL}/api/alert`;
-            formData.append('animal', 'ANIMAL ON ROAD (રસ્તા પર પ્રાણી)');
-          }
+      const formData = new FormData();
+      formData.append('photo', blob, 'alert_snapshot.jpg');
 
-          return fetch(endpoint, {
-            method: 'POST',
-            body: formData
-          });
-        })
-        .then(res => res.json())
-        .then(data => console.log("Telegram Alert Sent Response:", data))
-        .catch(err => console.error("Telegram Alert Error:", err));
+      let endpoint = "";
+      if (type === 'GUNSHOT') {
+        endpoint = `${BACKEND_URL}/api/forest-alert`;
+        formData.append('label', 'GUNSHOT DETECTED (બંદૂકનો અવાજ)');
+      } else {
+        endpoint = `${BACKEND_URL}/api/alert`;
+        formData.append('animal', 'ANIMAL ON ROAD (રસ્તા પર પ્રાણી)');
+      }
+
+      fetch(endpoint, {
+        method: 'POST',
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => console.log("Telegram Alert Sent Response:", data))
+      .catch(err => console.error("Telegram Alert Error:", err));
     }
 
     function sendEmailAlert(target, alertDetail, videoElem) {
