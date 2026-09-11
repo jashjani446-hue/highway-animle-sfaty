@@ -16,23 +16,11 @@
       "dest": "index.py"
     },
     {
-      "src": "/api/webhook",
-      "dest": "index.py"
-    },
-    {
       "src": "/alert",
       "dest": "index.py"
     },
     {
-      "src": "/api/alert",
-      "dest": "index.py"
-    },
-    {
       "src": "/forest-alert",
-      "dest": "index.py"
-    },
-    {
-      "src": "/api/forest-alert",
       "dest": "index.py"
     },
     {
