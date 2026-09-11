@@ -8,17 +8,17 @@ from flask_cors import CORS
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-BOT_TOKEN = "8560832618:AAFxHDrVvAEHDR1zKUtK1glQq0RWMsYrWXk"
-ADMIN_PASSWORD = "jash@2310"
-
-# Firebase Base URL
-FIREBASE_BASE_URL = "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian"
+# Load environment variables for security
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8560832618:AAFxHDrVvAEHDR1zKUtK1glQq0RWMsYrWXk")
+ADMIN_PASSWORD = os.getenv("jashjani")
+FIREBASE_BASE_URL = os.getenv(
+    "FIREBASE_BASE_URL", 
+    "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian"
+)
 
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = Flask(__name__)
 CORS(app)
-
-user_states = {}
 
 # --- FIREBASE HELPER FUNCTIONS ---
 
@@ -47,6 +47,20 @@ def is_admin(chat_id):
 
 def add_admin(chat_id):
     set_firebase_data(f"admins/{chat_id}", True)
+
+# Persist user states in Firebase for serverless compatibility
+def set_user_state(chat_id, state):
+    set_firebase_data(f"user_states/{chat_id}", state)
+
+def get_user_state(chat_id):
+    return get_firebase_data(f"user_states/{chat_id}")
+
+def clear_user_state(chat_id):
+    try:
+        url = f"{FIREBASE_BASE_URL}/user_states/{chat_id}.json"
+        requests.delete(url, timeout=5)
+    except Exception as e:
+        print(f"Firebase Delete Error: {e}")
 
 def save_visitor_code(code, phone, duration_str):
     seconds_map = {
@@ -88,17 +102,22 @@ def get_active_recipients():
     recipients = set()
     now = time.time()
 
+    # Read base state in one fetch to minimize network calls
+    root_data = get_firebase_data("")
+    if not isinstance(root_data, dict):
+        return []
+
     # 1. Add Admins
-    admins = get_firebase_data("admins")
+    admins = root_data.get("admins", {})
     if isinstance(admins, dict):
         for admin_id in admins.keys():
             try:
                 recipients.add(int(admin_id))
-            except Exception:
+            except (ValueError, TypeError):
                 pass
 
     # 2. Add Valid Visitors
-    subscribers = get_firebase_data("subscribers")
+    subscribers = root_data.get("subscribers", {})
     if isinstance(subscribers, dict):
         for cid, sdata in subscribers.items():
             if isinstance(sdata, dict):
@@ -106,7 +125,7 @@ def get_active_recipients():
                 if expire_at > now:
                     try:
                         recipients.add(int(cid))
-                    except Exception:
+                    except (ValueError, TypeError):
                         pass
 
     return list(recipients)
@@ -150,7 +169,6 @@ def monitoring_keyboard():
 def forest_dept_keyboard():
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("📊 Monitoring (Gunshot Alerts)", callback_data="view_gunshots"))
-    # તમારું બીજું નવું Vercel Dashboard લિંક અહીં આવશે
     markup.add(InlineKeyboardButton("📹 Device (Gir Forest Live)", url="https://gir-forest-guardian.vercel.app/"))
     markup.add(InlineKeyboardButton("🔙 Back", callback_data="admin_monitoring"))
     return markup
@@ -190,7 +208,7 @@ def callback_listener(call):
         elif call.data == "menu_admin":
             if not is_admin(chat_id):
                 bot.answer_callback_query(call.id, "🔒 Enter admin password in chat first!")
-                user_states[chat_id] = "awaiting_admin_password"
+                set_user_state(chat_id, "awaiting_admin_password")
                 bot.send_message(chat_id, "🔐 Please enter the **Admin Password**:")
             else:
                 bot.edit_message_text("🛠️ *Admin Panel*", chat_id, message_id, parse_mode="Markdown", reply_markup=admin_menu_keyboard())
@@ -200,7 +218,7 @@ def callback_listener(call):
 
         elif call.data.startswith("dur_"):
             duration = call.data.split("_")[1]
-            user_states[chat_id] = {"action": "awaiting_phone", "duration": duration}
+            set_user_state(chat_id, {"action": "awaiting_phone", "duration": duration})
             bot.send_message(chat_id, f"📱 Selected duration: *{duration}*\nNow please type the Visitor's Phone Number:")
 
         elif call.data == "admin_monitoring":
@@ -213,7 +231,7 @@ def callback_listener(call):
             bot.edit_message_text("🛣️ *Highway Department*", chat_id, message_id, parse_mode="Markdown", reply_markup=highway_dept_keyboard())
 
         elif call.data == "menu_visitor":
-            user_states[chat_id] = "awaiting_visitor_code"
+            set_user_state(chat_id, "awaiting_visitor_code")
             bot.send_message(chat_id, "🎟️ *Visitor Access*\nPlease enter your Pass Code:")
 
         elif call.data in ["view_gunshots", "view_animal_alerts"]:
@@ -226,18 +244,18 @@ def callback_listener(call):
 def handle_text_inputs(message):
     chat_id = message.chat.id
     text = message.text.strip()
-    state = user_states.get(chat_id)
+    state = get_user_state(chat_id)
 
     try:
         if text == ADMIN_PASSWORD:
             add_admin(chat_id)
             bot.reply_to(message, "🎉 *Admin Access Granted!*", parse_mode="Markdown", reply_markup=admin_menu_keyboard())
-            user_states.pop(chat_id, None)
+            clear_user_state(chat_id)
             return
 
         if state == "awaiting_admin_password":
             bot.reply_to(message, "❌ Incorrect Password!")
-            user_states.pop(chat_id, None)
+            clear_user_state(chat_id)
             return
 
         if isinstance(state, dict) and state.get("action") == "awaiting_phone":
@@ -247,7 +265,7 @@ def handle_text_inputs(message):
 
             save_visitor_code(code, phone, duration)
             bot.reply_to(message, f"✅ *Visitor Code Created!*\n\n🎟️ Code: `{code}`\n📱 Phone: {phone}\n⏱️ Duration: {duration}", parse_mode="Markdown")
-            user_states.pop(chat_id, None)
+            clear_user_state(chat_id)
             return
 
         if state == "awaiting_visitor_code":
@@ -256,7 +274,7 @@ def handle_text_inputs(message):
                 bot.reply_to(message, f"🎉 *Visitor Code Verified!*\n\nWelcome! Your Chat ID has been saved.\n⏱️ Access Duration: *{duration}*\n\nYou will now receive live alert photos!", parse_mode="Markdown")
             else:
                 bot.reply_to(message, "❌ Invalid or Expired Pass Code!")
-            user_states.pop(chat_id, None)
+            clear_user_state(chat_id)
             return
     except Exception as e:
         print(f"Error handling message: {e}")
@@ -264,7 +282,6 @@ def handle_text_inputs(message):
 
 # --- API ROUTES ---
 
-# 1. Highway Department Alert Route
 @app.route('/api/alert', methods=['POST'])
 @app.route('/alert', methods=['POST'])
 def receive_alert_from_web():
@@ -296,7 +313,7 @@ def receive_alert_from_web():
 
     return jsonify({"status": "Highway Alert sent", "sent_to": success_count}), 200
 
-# 2. Forest Department (Gunshot Alert Route)
+
 @app.route('/api/forest-alert', methods=['POST'])
 @app.route('/forest-alert', methods=['POST'])
 def receive_forest_alert():
@@ -333,6 +350,7 @@ def receive_forest_alert():
 
     return jsonify({"status": "Forest Gunshot Alert sent", "sent_to": success_count}), 200
 
+
 @app.route('/api/webhook', methods=['POST', 'GET'])
 @app.route('/webhook', methods=['POST', 'GET'])
 def telegram_webhook():
@@ -349,6 +367,7 @@ def telegram_webhook():
             print(f"Webhook processing error: {e}")
             return 'Error', 500
     return 'Bad Request', 400
+
 
 @app.route('/', methods=['GET'])
 def index_check():
