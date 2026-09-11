@@ -58,7 +58,7 @@ def save_visitor_code(code, phone, duration_str):
         "always": 100 * 365 * 86400
     }
     dur_sec = seconds_map.get(str(duration_str).lower(), 3600)
-    
+
     code_data = {
         "phone": phone,
         "duration_str": duration_str,
@@ -73,7 +73,7 @@ def verify_and_register_visitor(chat_id, code):
         c_data = codes[code]
         dur_sec = c_data.get("dur_sec", 3600)
         expire_timestamp = time.time() + dur_sec
-        
+
         subscriber_data = {
             "code": code,
             "phone": c_data.get("phone", ""),
@@ -97,7 +97,7 @@ def get_active_recipients():
             except Exception:
                 pass
 
-    # 2. Add Valid Visitors/Subscribers (સુધી Validity બાકી હોય ત્યાં સુધી)
+    # 2. Add Valid Visitors
     subscribers = get_firebase_data("subscribers")
     if isinstance(subscribers, dict):
         for cid, sdata in subscribers.items():
@@ -112,11 +112,10 @@ def get_active_recipients():
     return list(recipients)
 
 
-# --- KEYBOARDS (સંપૂર્ણ UI) ---
+# --- KEYBOARDS (UI) ---
 
 def main_menu_keyboard(chat_id):
     markup = InlineKeyboardMarkup()
-    # Admin Panel અને Visitor Access બંને બટન દરેક યુઝરને દેખાશે
     markup.add(InlineKeyboardButton("🛠️ Admin Panel", callback_data="menu_admin"))
     markup.add(InlineKeyboardButton("👤 Visitor Access", callback_data="menu_visitor"))
     return markup
@@ -151,7 +150,8 @@ def monitoring_keyboard():
 def forest_dept_keyboard():
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("📊 Monitoring (Gunshot Alerts)", callback_data="view_gunshots"))
-    markup.add(InlineKeyboardButton("📹 Device (Gir Forest Live)", url="https://highway-animle-sfaty.vercel.app/"))
+    # તમારું બીજું નવું Vercel Dashboard લિંક અહીં આવશે
+    markup.add(InlineKeyboardButton("📹 Device (Gir Forest Live)", url="https://gir-forest-guardian.vercel.app/"))
     markup.add(InlineKeyboardButton("🔙 Back", callback_data="admin_monitoring"))
     return markup
 
@@ -218,7 +218,7 @@ def callback_listener(call):
 
         elif call.data in ["view_gunshots", "view_animal_alerts"]:
             bot.answer_callback_query(call.id, "✅ Subscribed to real-time alerts!")
-            bot.send_message(chat_id, "📡 *Real-time Alerts Active!* You will receive immediate photo notifications when animals/gunshots are detected.")
+            bot.send_message(chat_id, "📡 *Real-time Alerts Active!* You will receive immediate photo notifications when alerts/gunshots are detected.")
     except Exception as e:
         print(f"Error in callback: {e}")
 
@@ -229,7 +229,6 @@ def handle_text_inputs(message):
     state = user_states.get(chat_id)
 
     try:
-        # 1. Admin Password Input
         if text == ADMIN_PASSWORD:
             add_admin(chat_id)
             bot.reply_to(message, "🎉 *Admin Access Granted!*", parse_mode="Markdown", reply_markup=admin_menu_keyboard())
@@ -241,18 +240,16 @@ def handle_text_inputs(message):
             user_states.pop(chat_id, None)
             return
 
-        # 2. Visitor Code Generation (Phone input)
         if isinstance(state, dict) and state.get("action") == "awaiting_phone":
             duration = state.get("duration")
             phone = text
             code = "PASS-" + ''.join(random.choices(string.digits, k=6))
-            
+
             save_visitor_code(code, phone, duration)
             bot.reply_to(message, f"✅ *Visitor Code Created!*\n\n🎟️ Code: `{code}`\n📱 Phone: {phone}\n⏱️ Duration: {duration}", parse_mode="Markdown")
             user_states.pop(chat_id, None)
             return
 
-        # 3. Visitor Code Input by End User
         if state == "awaiting_visitor_code":
             success, duration = verify_and_register_visitor(chat_id, text)
             if success:
@@ -267,6 +264,7 @@ def handle_text_inputs(message):
 
 # --- API ROUTES ---
 
+# 1. Highway Department Alert Route
 @app.route('/api/alert', methods=['POST'])
 @app.route('/alert', methods=['POST'])
 def receive_alert_from_web():
@@ -278,11 +276,10 @@ def receive_alert_from_web():
     photo_bytes = photo_file.read()
 
     recipients = get_active_recipients()
-
     if not recipients:
         return jsonify({"status": "No active recipients found", "sent_to": 0}), 200
 
-    caption = f"🚨 *ROADGUARDIAN ALERT*\n\n🐾 *Animal Detected:* {animal}\n📍 *Location:* Rajkot-Gondal Highway\n⚠️ *Drive with caution!*"
+    caption = f"🚨 *ROADGUARDIAN HIGHWAY ALERT*\n\n🐾 *Animal Detected:* {animal}\n📍 *Location:* Rajkot-Gondal Highway\n⚠️ *Drive with caution!*"
 
     success_count = 0
     for cid in recipients:
@@ -297,7 +294,44 @@ def receive_alert_from_web():
         except Exception as e:
             print(f"Failed to send photo to {cid}: {e}")
 
-    return jsonify({"status": "Alert sent", "sent_to": success_count}), 200
+    return jsonify({"status": "Highway Alert sent", "sent_to": success_count}), 200
+
+# 2. Forest Department (Gunshot Alert Route)
+@app.route('/api/forest-alert', methods=['POST'])
+@app.route('/forest-alert', methods=['POST'])
+def receive_forest_alert():
+    if 'photo' not in request.files:
+        return jsonify({"error": "Missing photo file"}), 400
+
+    sound_label = request.form.get('label', 'GUNSHOT DETECTED')
+    photo_file = request.files['photo']
+    photo_bytes = photo_file.read()
+
+    recipients = get_active_recipients()
+    if not recipients:
+        return jsonify({"status": "No active recipients found", "sent_to": 0}), 200
+
+    caption = (
+        f"🚨 *GIR FOREST DEPARTMENT CRITICAL ALERT*\n\n"
+        f"💥 *Threat Detected:* {sound_label}\n"
+        f"📍 *Location:* Gir Forest Zone-1\n"
+        f"⚠️ *Immediate Action Required! Forest Range Officer Alerted.*"
+    )
+
+    success_count = 0
+    for cid in recipients:
+        try:
+            bot.send_photo(
+                chat_id=cid, 
+                photo=('forest_alert.jpg', photo_bytes, 'image/jpeg'), 
+                caption=caption, 
+                parse_mode="Markdown"
+            )
+            success_count += 1
+        except Exception as e:
+            print(f"Failed to send photo to {cid}: {e}")
+
+    return jsonify({"status": "Forest Gunshot Alert sent", "sent_to": success_count}), 200
 
 @app.route('/api/webhook', methods=['POST', 'GET'])
 @app.route('/webhook', methods=['POST', 'GET'])
@@ -318,4 +352,4 @@ def telegram_webhook():
 
 @app.route('/', methods=['GET'])
 def index_check():
-    return "🚀 RoadGuardian Vercel Python Backend Active!", 200
+    return "🚀 RoadGuardian & Gir Forest Vercel Backend Active!", 200
