@@ -2,13 +2,14 @@ import os
 import random
 import string
 import time
+import io
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# Load environment variables for security
+# Environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8560832618:AAFxHDrVvAEHDR1zKUtK1glQq0RWMsYrWXk")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "jashjani")
 FIREBASE_BASE_URL = os.getenv(
@@ -46,18 +47,17 @@ def is_admin(chat_id):
     return False
 
 def add_admin(chat_id):
-    set_firebase_data(f"admins/{chat_id}", True)
+    set_firebase_data(f"admins/{str(chat_id)}", True)
 
-# Persist user states in Firebase for serverless compatibility
 def set_user_state(chat_id, state):
-    set_firebase_data(f"user_states/{chat_id}", state)
+    set_firebase_data(f"user_states/{str(chat_id)}", state)
 
 def get_user_state(chat_id):
-    return get_firebase_data(f"user_states/{chat_id}")
+    return get_firebase_data(f"user_states/{str(chat_id)}")
 
 def clear_user_state(chat_id):
     try:
-        url = f"{FIREBASE_BASE_URL}/user_states/{chat_id}.json"
+        url = f"{FIREBASE_BASE_URL}/user_states/{str(chat_id)}.json"
         requests.delete(url, timeout=5)
     except Exception as e:
         print(f"Firebase Delete Error: {e}")
@@ -94,7 +94,7 @@ def verify_and_register_visitor(chat_id, code):
             "duration": c_data.get("duration_str", ""),
             "expire_at": expire_timestamp
         }
-        set_firebase_data(f"subscribers/{chat_id}", subscriber_data)
+        set_firebase_data(f"subscribers/{str(chat_id)}", subscriber_data)
         return True, c_data.get("duration_str", "")
     return False, None
 
@@ -111,8 +111,8 @@ def get_active_recipients():
     if isinstance(admins, dict):
         for admin_id in admins.keys():
             try:
-                recipients.add(int(admin_id))
-            except (ValueError, TypeError):
+                recipients.add(str(admin_id))
+            except Exception:
                 pass
 
     # 2. Add Valid Visitors
@@ -123,8 +123,8 @@ def get_active_recipients():
                 expire_at = sdata.get("expire_at", 0)
                 if expire_at > now:
                     try:
-                        recipients.add(int(cid))
-                    except (ValueError, TypeError):
+                        recipients.add(str(cid))
+                    except Exception:
                         pass
 
     return list(recipients)
@@ -279,7 +279,7 @@ def handle_text_inputs(message):
         print(f"Error handling message: {e}")
 
 
-# --- API ROUTES ---
+# --- API ROUTES FOR ALERTS ---
 
 @app.route('/api/alert', methods=['POST'])
 @app.route('/alert', methods=['POST'])
@@ -300,12 +300,9 @@ def receive_alert_from_web():
     success_count = 0
     for cid in recipients:
         try:
-            bot.send_photo(
-                chat_id=cid, 
-                photo=('alert.jpg', photo_bytes, 'image/jpeg'), 
-                caption=caption, 
-                parse_mode="Markdown"
-            )
+            photo_stream = io.BytesIO(photo_bytes)
+            photo_stream.name = 'alert.jpg'
+            bot.send_photo(chat_id=cid, photo=photo_stream, caption=caption, parse_mode="Markdown")
             success_count += 1
         except Exception as e:
             print(f"Failed to send photo to {cid}: {e}")
@@ -337,12 +334,9 @@ def receive_forest_alert():
     success_count = 0
     for cid in recipients:
         try:
-            bot.send_photo(
-                chat_id=cid, 
-                photo=('forest_alert.jpg', photo_bytes, 'image/jpeg'), 
-                caption=caption, 
-                parse_mode="Markdown"
-            )
+            photo_stream = io.BytesIO(photo_bytes)
+            photo_stream.name = 'forest_alert.jpg'
+            bot.send_photo(chat_id=cid, photo=photo_stream, caption=caption, parse_mode="Markdown")
             success_count += 1
         except Exception as e:
             print(f"Failed to send photo to {cid}: {e}")
