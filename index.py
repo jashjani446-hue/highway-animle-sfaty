@@ -11,6 +11,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # Environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8560832618:AAFxHDrVvAEHDR1zKUtK1glQq0RWMsYrWXk")
+DEFAULT_CHAT_ID = "8517706642"  # ⚠️ અહીં તમારો પોતાનો Telegram Chat ID મૂકો
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "jashjani")
 FIREBASE_BASE_URL = os.getenv(
     "FIREBASE_BASE_URL", 
@@ -103,31 +104,34 @@ def get_active_recipients():
     now = time.time()
 
     root_data = get_firebase_data("")
-    if not isinstance(root_data, dict):
-        return []
+    if isinstance(root_data, dict):
+        # 1. Add Admins
+        admins = root_data.get("admins", {})
+        if isinstance(admins, dict):
+            for admin_id in admins.keys():
+                try:
+                    recipients.add(str(admin_id))
+                except Exception:
+                    pass
 
-    # 1. Add Admins
-    admins = root_data.get("admins", {})
-    if isinstance(admins, dict):
-        for admin_id in admins.keys():
-            try:
-                recipients.add(str(admin_id))
-            except Exception:
-                pass
+        # 2. Add Valid Visitors
+        subscribers = root_data.get("subscribers", {})
+        if isinstance(subscribers, dict):
+            for cid, sdata in subscribers.items():
+                if isinstance(sdata, dict):
+                    expire_at = sdata.get("expire_at", 0)
+                    if expire_at > now:
+                        try:
+                            recipients.add(str(cid))
+                        except Exception:
+                            pass
 
-    # 2. Add Valid Visitors
-    subscribers = root_data.get("subscribers", {})
-    if isinstance(subscribers, dict):
-        for cid, sdata in subscribers.items():
-            if isinstance(sdata, dict):
-                expire_at = sdata.get("expire_at", 0)
-                if expire_at > now:
-                    try:
-                        recipients.add(str(cid))
-                    except Exception:
-                        pass
+    # જો Firebase માંથી કોઈ ન મળે તો ફેલસેફ તરીકે DEFAULT_CHAT_ID નો ઉપયોગ કરો
+    active_list = list(recipients)
+    if not active_list and DEFAULT_CHAT_ID:
+        active_list = [DEFAULT_CHAT_ID]
 
-    return list(recipients)
+    return active_list
 
 
 # --- KEYBOARDS (UI) ---
@@ -292,8 +296,6 @@ def receive_alert_from_web():
     photo_bytes = photo_file.read()
 
     recipients = get_active_recipients()
-    if not recipients:
-        return jsonify({"status": "No active recipients found", "sent_to": 0}), 200
 
     caption = f"🚨 *ROADGUARDIAN HIGHWAY ALERT*\n\n🐾 *Animal Detected:* {animal}\n📍 *Location:* Rajkot-Gondal Highway\n⚠️ *Drive with caution!*"
 
@@ -321,8 +323,6 @@ def receive_forest_alert():
     photo_bytes = photo_file.read()
 
     recipients = get_active_recipients()
-    if not recipients:
-        return jsonify({"status": "No active recipients found", "sent_to": 0}), 200
 
     caption = (
         f"🚨 *GIR FOREST DEPARTMENT CRITICAL ALERT*\n\n"
