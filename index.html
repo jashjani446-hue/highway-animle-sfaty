@@ -1,462 +1,388 @@
 <!DOCTYPE html>
 <html lang="gu">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RoadGuardian AI - Live Detection Dashboard</title>
-    <!-- TensorFlow.js and COCO-SSD Model -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>સ્માર્ટ સેફ્ટી કંટ્રોલ - ફોરેસ્ટ & હાઇવે</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background-color: #121212; color: #ffffff; font-family: 'Segoe UI', Arial, sans-serif; text-align: center; }
 
-    <style>
-        * { box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #121212;
-            color: white;
-            text-align: center;
-            margin: 0;
-            padding: 15px;
-        }
-        h1 {
-            color: #00E676;
-            margin-top: 5px;
-            margin-bottom: 2px;
-            font-size: 24px;
-        }
-        p.subtitle {
-            color: #aaa;
-            margin-top: 0;
-            font-size: 13px;
-        }
+    /* હોમ પેજ (બે ભાગ) */
+    .home-container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: 30px 20px;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    .dept-card {
+      background: #1e1e1e;
+      border: 2px solid #333;
+      border-radius: 16px;
+      padding: 30px 20px;
+      cursor: pointer;
+      transition: 0.3s;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+    .dept-card:hover {
+      border-color: #00e676;
+      transform: translateY(-3px);
+    }
+    .dept-card h2 { font-size: 22px; margin-bottom: 10px; color: #00e676; }
+    .dept-card p { font-size: 14px; color: #ccc; }
 
-        /* Nav Tabs */
-        .tab-container {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-        .tab-btn {
-            background-color: #222;
-            color: #888;
-            border: 2px solid #444;
-            padding: 10px 20px;
-            font-size: 14px;
-            font-weight: bold;
-            border-radius: 25px;
-            cursor: pointer;
-            transition: 0.3s;
-            flex: 1;
-            max-width: 200px;
-        }
-        .tab-btn.active {
-            background-color: #00E676;
-            color: #000;
-            border-color: #00E676;
-        }
+    /* વિભાગીય પેજ */
+    .dept-page { display: none; padding: 20px; max-width: 500px; margin: 0 auto; }
+    .active-page { display: block; }
 
-        /* Page Content */
-        .page-content { display: none; }
-        .page-content.active { display: block; }
+    .btn-back {
+      background: #333;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-bottom: 15px;
+      float: left;
+    }
 
-        /* Status Header */
-        #status-box {
-            padding: 12px 20px;
-            font-size: 18px;
-            font-weight: bold;
-            border-radius: 8px;
-            display: inline-block;
-            width: 100%;
-            max-width: 480px;
-            background-color: #2e7d32;
-            color: white;
-            transition: 0.3s;
-            margin-bottom: 10px;
-        }
-        .danger {
-            background-color: #c62828 !important;
-            animation: pulse 1s infinite;
-        }
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.7; }
-            100% { opacity: 1; }
-        }
+    .card { background: #1e1e1e; border-radius: 12px; padding: 20px; margin-top: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); clear: both; }
+    .status-box { padding: 20px; margin-top: 10px; font-size: 18px; font-weight: bold; border-radius: 8px; transition: 0.3s; }
+    .safe { background-color: #2e7d32; color: #ffffff; }
+    .alert { background-color: #c62828; color: #ffffff; animation: blink 0.8s infinite; }
+    @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
 
-        #alertStatus {
-            font-size: 13px;
-            color: #ffeb3b;
-            margin-bottom: 10px;
-            font-weight: bold;
-        }
+    .webcam-box { position: relative; border: 2px solid #2e7d32; border-radius: 8px; overflow: hidden; background: #000; margin-top: 15px; min-height: 240px; }
+    video, canvas { width: 100%; height: auto; display: block; }
 
-        .test-btn {
-            background-color: #0088cc;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 20px;
-            cursor: pointer;
-            margin-bottom: 15px;
-            font-weight: bold;
-            font-size: 14px;
-            box-shadow: 0 4px 10px rgba(0, 136, 204, 0.4);
-            transition: 0.2s;
-        }
-        .test-btn:active {
-            transform: scale(0.95);
-        }
-
-        /* Camera View */
-        #webcam-container {
-            position: relative;
-            display: inline-block;
-            border: 3px solid #333;
-            border-radius: 12px;
-            overflow: hidden;
-            background-color: #000;
-            width: 100%;
-            max-width: 480px;
-        }
-        video {
-            display: block;
-            width: 100%;
-            height: auto;
-        }
-
-        /* Logs Styling */
-        .phone-container {
-            background-color: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 16px;
-            padding: 15px;
-            margin: 10px auto;
-            max-width: 480px;
-            text-align: left;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
-        .phone-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid #333;
-            padding-bottom: 10px;
-            margin-bottom: 15px;
-        }
-        .phone-header .sender {
-            font-weight: bold;
-            color: #00E676;
-            font-size: 15px;
-        }
-
-        #message-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            max-height: 400px;
-            overflow-y: auto;
-            padding-right: 5px;
-        }
-
-        .sms-item {
-            background-color: #263238;
-            border-left: 4px solid #0088cc;
-            border-radius: 8px;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .sms-item.alert-mode {
-            background-color: #3e1212;
-            border-left: 4px solid #ff5252;
-        }
-        .sms-time {
-            font-size: 11px;
-            color: #aaa;
-            align-self: flex-end;
-        }
-        .sms-text {
-            font-size: 14px;
-            color: #fff;
-            line-height: 1.4;
-            word-break: break-word;
-        }
-
-        .clear-btn {
-            background-color: #333;
-            color: #ff5252;
-            border: 1px solid #ff5252;
-            padding: 8px;
-            font-size: 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 15px;
-            font-weight: bold;
-        }
-
-        .toast {
-            visibility: hidden;
-            min-width: 200px;
-            background-color: #00E676;
-            color: #000;
-            text-align: center;
-            border-radius: 20px;
-            padding: 10px;
-            position: fixed;
-            z-index: 100;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-weight: bold;
-        }
-        .toast.show {
-            visibility: visible;
-            animation: fadein 0.5s, fadeout 0.5s 2.5s;
-        }
-        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
-        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
-    </style>
+    .btn-start { background: #00e676; color: #000; border: none; padding: 12px 24px; font-weight: bold; font-size: 16px; border-radius: 6px; cursor: pointer; margin-bottom: 15px; width: 100%; }
+    .label-box { margin-top: 10px; text-align: left; font-size: 14px; color: #00e676; background: #111; padding: 10px; border-radius: 6px; min-height: 50px; }
+  </style>
 </head>
 <body>
 
-    <h1>RoadGuardian AI</h1>
-    <p class="subtitle">Rajkot-Gondal Highway Safety Dashboard</p>
+  <!-- ૧. પ્રથમ પેજ: બે અલગ વિભાગ પસંદગી -->
+  <div id="homePage" class="active-page">
+    <h1 style="margin-top: 30px; margin-bottom: 10px;">સ્માર્ટ સેફ્ટી કંટ્રોલ</h1>
+    <p style="color: #aaa; margin-bottom: 20px;">કૃપા કરીને તમારો ડિપાર્ટમેન્ટ પસંદ કરો</p>
 
-    <!-- Navigation -->
-    <div class="tab-container">
-        <button class="tab-btn active" onclick="switchTab('camera')">📹 CAMERA</button>
-        <button class="tab-btn" onclick="switchTab('notifications')">📱 LOGS</button>
+    <div class="home-container">
+      <div class="dept-card" onclick="openDepartment('forest')">
+        <h2>🌳 ગીર ફોરેસ્ટ ડિપાર્ટમેન્ટ</h2>
+        <p>Anti-Clap Gunshot Detection (બંદૂકના અવાજની ઓળખ)</p>
+      </div>
+
+      <div class="dept-card" onclick="openDepartment('highway')">
+        <h2>🛣️ હાઇવે ડિપાર્ટમેન્ટ</h2>
+        <p>Animal Detection (રસ્તા પર તમામ પ્રાણીઓની ઓળખ)</p>
+      </div>
     </div>
+  </div>
 
-    <!-- Live Status Header -->
-    <div id="status-box">SAFE: ROAD CLEAR</div>
-    <div id="alertStatus">📱 Telegram Bot Ready</div>
-
-    <!-- Manual Test Button -->
-    <div>
-        <button class="test-btn" onclick="testTelegramDirectly()">🧪 SEND TEST TELEGRAM PHOTO</button>
+  <!-- ૨. ફોરેસ્ટ ડિપાર્ટમેન્ટ પેજ -->
+  <div id="forestPage" class="dept-page">
+    <button class="btn-back" onclick="goHome()">⬅️ પાછા જાઓ</button>
+    <div class="card">
+      <h2>🌳 ગીર ફોરેસ્ટ ગનશૂટ સિસ્ટમ</h2>
+      <button class="btn-start" id="startForestBtn" onclick="startForestSystem()">▶️ ફોરેસ્ટ કેમેરા & ઓડિયો શરૂ કરો</button>
+      <div id="forestStatus" class="status-box safe">સિસ્ટમ તૈયાર છે - START દબાવો</div>
+      <div class="webcam-box">
+        <video id="forestWebcam" autoplay playsinline muted></video>
+      </div>
+      <div id="label-container-forest" class="label-box">ઓડિયો વિશ્લેષણ અહીં દેખાશે...</div>
     </div>
+  </div>
 
-    <!-- PAGE 1: CAMERA -->
-    <div id="camera-page" class="page-content active">
-        <div id="webcam-container">
-            <video id="webcam" autoplay playsinline muted></video>
-        </div>
+  <!-- ૩. હાઇવે ડિપાર્ટમેન્ટ પેજ -->
+  <div id="highwayPage" class="dept-page">
+    <button class="btn-back" onclick="goHome()">⬅️ પાછા જાઓ</button>
+    <div class="card">
+      <h2>🛣️ હાઇવે સેફ્ટી સિસ્ટમ</h2>
+      <button class="btn-start" id="startHighwayBtn" onclick="startHighwaySystem()">▶️ હાઇવે કેમેરા શરૂ કરો</button>
+      <div id="highwayStatus" class="status-box safe">સિસ્ટમ તૈયાર છે - START દબાવો</div>
+      <div class="webcam-box">
+        <!-- Live Video Element -->
+        <video id="highwayWebcam" autoplay playsinline muted style="width:100%; height:auto;"></video>
+        <canvas id="highwayCanvas" style="display:none;"></canvas>
+      </div>
+      <div id="label-container-highway" class="label-box">ડિટેક્ટ થયેલા પ્રાણીઓ અહીં દેખાશે...</div>
     </div>
+  </div>
 
-    <!-- PAGE 2: SAVED LOGS -->
-    <div id="notifications-page" class="page-content">
-        <div class="phone-container">
-            <div class="phone-header">
-                <span class="sender">📱 Sent Telegram Logs</span>
-            </div>
-            <div id="message-list">
-                <div style="color: #666; text-align: center; padding: 20px;">No alerts sent yet.</div>
-            </div>
-            <button class="clear-btn" onclick="clearAllMessages()">🗑️ CLEAR ALL LOGS</button>
-        </div>
-    </div>
+  <canvas id="photoCanvas" style="display:none;"></canvas>
 
-    <canvas id="photoCanvas" style="display:none;"></canvas>
-    <div id="toast" class="toast">Action Completed!</div>
+  <!-- External JS Libraries -->
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.4.0/dist/speech-commands.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 
-    <script>
-        const FIREBASE_URL = "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian/alert.json";
-        const SERVER_URL = "/api/alert";
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-        const video = document.getElementById('webcam');
-        const statusBox = document.getElementById('status-box');
-        const alertStatus = document.getElementById('alertStatus');
-        const messageList = document.getElementById('message-list');
-        const photoCanvas = document.getElementById('photoCanvas');
+    // 🔗 તમારું Python Backend URL અહીં સેટ કરો
+    const BACKEND_URL = "https://your-vercel-backend-url.vercel.app";
 
-        let model = null;
-        let lastAlertState = -1;
-        let isCameraActive = true;
-        let lastTelegramSentTime = 0;
-        let savedMessages = JSON.parse(localStorage.getItem('roadGuardian_telegram_logs')) || [];
+    // Firebase Configuration
+    const firebaseConfig = {
+      databaseURL: "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app"
+    };
 
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.page-content').forEach(page => page.classList.remove('active'));
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
 
-            if (tabName === 'camera') {
-                document.querySelectorAll('.tab-btn')[0].classList.add('active');
-                document.getElementById('camera-page').classList.add('active');
-                isCameraActive = true;
-            } else {
-                document.querySelectorAll('.tab-btn')[1].classList.add('active');
-                document.getElementById('notifications-page').classList.add('active');
-                isCameraActive = false;
-                renderSavedMessages();
+    // EmailJS Setup
+    const EMAILJS_SERVICE_ID = "service_9t8ppxg";
+    const EMAILJS_TEMPLATE_ID = "template_cvp7e1i";
+    const EMAILJS_PUBLIC_KEY = "ZXgCOupaENPcCchAD";
+    emailjs.init(EMAILJS_PUBLIC_KEY);
+
+    const FOREST_MODEL_URL = "https://teachablemachine.withgoogle.com/models/DLoC1yucZ/";
+
+    let isForestAlerting = false;
+    let isHighwayAlerting = false;
+    let cocoModel = null;
+
+    // Navigation Logic
+    window.openDepartment = function(dept) {
+      document.getElementById('homePage').classList.remove('active-page');
+      if (dept === 'forest') {
+        document.getElementById('forestPage').classList.add('active-page');
+      } else if (dept === 'highway') {
+        document.getElementById('highwayPage').classList.add('active-page');
+      }
+    };
+
+    window.goHome = function() {
+      document.getElementById('forestPage').classList.remove('active-page');
+      document.getElementById('highwayPage').classList.remove('active-page');
+      document.getElementById('homePage').classList.add('active-page');
+    };
+
+    function grabSnapshot(videoElement) {
+      const photoCanvas = document.getElementById('photoCanvas');
+      photoCanvas.width = 640;
+      photoCanvas.height = 480;
+      const ctx = photoCanvas.getContext('2d');
+      try {
+        ctx.drawImage(videoElement, 0, 0, photoCanvas.width, photoCanvas.height);
+        return photoCanvas.toDataURL('image/jpeg', 0.85);
+      } catch (e) {
+        return "";
+      }
+    }
+
+    // 📩 Python Backend પર Telegram Photo Alert મોકલવાનું નવું ફંક્શન
+    function sendTelegramPhotoAlert(type, videoElem) {
+      const liveSnapshot = grabSnapshot(videoElem);
+      if (!liveSnapshot) return;
+
+      fetch(liveSnapshot)
+        .then(res => res.blob())
+        .then(blob => {
+          const formData = new FormData();
+          formData.append('photo', blob, 'alert_snapshot.jpg');
+
+          let endpoint = "";
+          if (type === 'GUNSHOT') {
+            endpoint = `${BACKEND_URL}/api/forest-alert`;
+            formData.append('label', 'GUNSHOT DETECTED (બંદૂકનો અવાજ)');
+          } else {
+            endpoint = `${BACKEND_URL}/api/alert`;
+            formData.append('animal', 'ANIMAL ON ROAD (રસ્તા પર પ્રાણી)');
+          }
+
+          return fetch(endpoint, {
+            method: 'POST',
+            body: formData
+          });
+        })
+        .then(res => res.json())
+        .then(data => console.log("Telegram Alert Sent Response:", data))
+        .catch(err => console.error("Telegram Alert Error:", err));
+    }
+
+    function sendEmailAlert(target, alertDetail, videoElem) {
+      const timeString = new Date().toLocaleString();
+      const liveSnapshot = grabSnapshot(videoElem);
+      const templateParams = {
+        to_name: target,
+        alert_time: timeString,
+        image_data: liveSnapshot,
+        message: `🚨 ઈમરજન્સી એલર્ટ: ${alertDetail} (${timeString} સમયે). કેમેરા ફોટો સાથે મોકલેલ છે.`
+      };
+
+      emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams)
+        .then(() => console.log("Email Dispatched Successfully!"))
+        .catch(err => console.error("EmailJS Error:", err));
+    }
+
+    // ==========================================
+    // ૧. ગીર ફોરેસ્ટ ગનશૂટ સિસ્ટમ
+    // ==========================================
+    window.startForestSystem = async function() {
+      document.getElementById('startForestBtn').style.display = 'none';
+      const forestBox = document.getElementById('forestStatus');
+      const forestVideo = document.getElementById('forestWebcam');
+      forestBox.innerText = "કેમેરા કનેક્ટ થઈ રહ્યો છે...";
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: "environment" }, 
+          audio: true 
+        });
+        forestVideo.srcObject = stream;
+        forestBox.innerText = "ફોરેસ્ટ મોનિટરિંગ સક્રિય...";
+      } catch (err) {
+        forestBox.className = "status-box alert";
+        forestBox.innerText = "કેમેરા ભૂલ: " + err.message;
+        return;
+      }
+
+      try {
+        const recognizer = speechCommands.create(
+          "BROWSER_FFT",
+          undefined,
+          FOREST_MODEL_URL + "model.json",
+          FOREST_MODEL_URL + "metadata.json"
+        );
+
+        await recognizer.ensureModelLoaded();
+        const classLabels = recognizer.wordLabels();
+        const labelContainer = document.getElementById("label-container-forest");
+        
+        labelContainer.innerHTML = "";
+        for (let i = 0; i < classLabels.length; i++) {
+          labelContainer.appendChild(document.createElement("div"));
+        }
+
+        recognizer.listen(result => {
+          const scores = result.scores;
+          for (let i = 0; i < classLabels.length; i++) {
+            labelContainer.childNodes[i].innerHTML = classLabels[i] + ": " + scores[i].toFixed(2);
+
+            const labelName = classLabels[i].toLowerCase();
+            if (scores[i] >= 0.88 && (labelName.includes("gunshoot") || labelName.includes("gunshot")) && !isForestAlerting) {
+              isForestAlerting = true;
+
+              // Firebase Path ('status')
+              set(ref(db, 'status'), 1);
+
+              forestBox.className = "status-box alert";
+              forestBox.innerText = "🚨 ALERT: બંદૂકનો અવાજ શોધી કાઢ્યો!";
+
+              // EmailJS અને Python Telegram બેકએન્ડ બંને પર ફોટો મોકલો
+              sendEmailAlert("Forest Range Officer", "Gunshot Detected", forestVideo);
+              sendTelegramPhotoAlert("GUNSHOT", forestVideo);
+
+              setTimeout(() => {
+                set(ref(db, 'status'), 0);
+                forestBox.className = "status-box safe";
+                forestBox.innerText = "ફોરેસ્ટ મોનિટરિંગ સક્રિય...";
+                isForestAlerting = false;
+              }, 3000);
             }
-        }
+          }
+        }, {
+          includeSpectrogram: false,
+          probabilityThreshold: 0.85,
+          invokeCallbackOnNoiseAndUnknown: true,
+          overlapFactor: 0.50
+        });
 
-        async function setupWebcam() {
-            return new Promise((resolve, reject) => {
-                navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" },
-                    audio: false
-                }).then((stream) => {
-                    video.srcObject = stream;
-                    video.onloadedmetadata = () => resolve();
-                }).catch((err) => reject(err));
-            });
-        }
+      } catch (e) {
+        alert("Forest Model Error: " + e.message);
+      }
+    };
 
-        async function updateFirebase(alertState) {
-            if (alertState === lastAlertState) return;
-            lastAlertState = alertState;
+    // ==========================================
+    // ૨. હાઇવે એનિબલ સિસ્ટમ
+    // ==========================================
+    window.startHighwaySystem = async function() {
+      document.getElementById('startHighwayBtn').style.display = 'none';
+      const highwayBox = document.getElementById('highwayStatus');
+      const highwayVideo = document.getElementById('highwayWebcam');
+      const labelContainer = document.getElementById('label-container-highway');
 
-            try {
-                await fetch(FIREBASE_URL, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(alertState)
-                });
-            } catch (error) {
-                console.error("Firebase Update Failed:", error);
+      highwayBox.innerText = "કેમેરા ચાલુ થઈ રહ્યો છે...";
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: "environment" }, 
+          audio: false 
+        });
+        highwayVideo.srcObject = stream;
+        await highwayVideo.play();
+        highwayBox.innerText = "કેમેરા ચાલુ. AI મોડેલ લોડ થાય છે...";
+      } catch (err) {
+        highwayBox.className = "status-box alert";
+        highwayBox.innerText = "કેમેરા ભૂલ: " + err.message;
+        console.error("Camera Error:", err);
+        return;
+      }
+
+      try {
+        cocoModel = await cocoSsd.load();
+        highwayBox.innerText = "હાઇવે મોનિટરિંગ સક્રિય...";
+        runHighwayDetection();
+      } catch (err) {
+        highwayBox.innerText = "AI મોડેલ ભૂલ: " + err.message;
+      }
+
+      const animalClasses = ['cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'bird'];
+
+      async function runHighwayDetection() {
+        if (!highwayVideo || highwayVideo.paused || highwayVideo.ended) return;
+
+        try {
+          const predictions = await cocoModel.detect(highwayVideo);
+          let detectedList = [];
+          let animalFound = false;
+
+          predictions.forEach(prediction => {
+            if (prediction.score > 0.5) {
+              const label = prediction.class.toLowerCase();
+              detectedList.push(`${prediction.class} (${Math.round(prediction.score * 100)}%)`);
+
+              if (animalClasses.includes(label)) {
+                animalFound = true;
+              }
             }
+          });
+
+          labelContainer.innerHTML = detectedList.length > 0 ? detectedList.join("<br>") : "કોઈ પ્રાણી દેખાતું નથી...";
+
+          if (animalFound && !isHighwayAlerting) {
+            isHighwayAlerting = true;
+
+            // Firebase Path ('status')
+            set(ref(db, 'status'), 1);
+
+            highwayBox.className = "status-box alert";
+            highwayBox.innerText = "🚨 WARNING: રસ્તા પર પ્રાણી ડિટેક્ટ થયું!";
+
+            // EmailJS અને Python Telegram બેકએન્ડ બંને પર ફોટો મોકલો
+            sendEmailAlert("Highway Patrol Officer", "Animal on Road Detected", highwayVideo);
+            sendTelegramPhotoAlert("ANIMAL", highwayVideo);
+
+            setTimeout(() => {
+              set(ref(db, 'status'), 0);
+              highwayBox.className = "status-box safe";
+              highwayBox.innerText = "હાઇવે મોનિટરિંગ સક્રિય...";
+              isHighwayAlerting = false;
+            }, 4000);
+          }
+        } catch (e) {
+          console.error("Detection Error:", e);
         }
 
-        function sendAnimalTelegramAlert(detectedAnimal) {
-            photoCanvas.width = 640;
-            photoCanvas.height = 480;
-            const ctx = photoCanvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
-
-            alertStatus.innerText = "⏳ Capturing photo and sending to Telegram...";
-
-            photoCanvas.toBlob(async (blob) => {
-                const formData = new FormData();
-                formData.append("photo", blob, "animal_detection.jpg");
-                formData.append("animal", detectedAnimal);
-
-                try {
-                    const response = await fetch(SERVER_URL, {
-                        method: "POST",
-                        body: formData
-                    });
-                    const result = await response.json();
-
-                    if (response.ok) {
-                        alertStatus.innerText = `✅ Photo sent via Telegram to ${result.sent_to || 0} user(s)!`;
-                        addMessageToStorage(`📱 Sent Telegram Alert: ${detectedAnimal} (${result.sent_to || 0} users)`, true);
-                        showToast("Telegram Photo Sent!");
-                    } else {
-                        alertStatus.innerText = `❌ Server Error: ${result.error || 'Failed'}`;
-                    }
-                } catch (err) {
-                    console.error("Connection Failed:", err);
-                    alertStatus.innerText = "❌ Cannot connect to Server!";
-                }
-            }, "image/jpeg", 0.8);
-        }
-
-        function testTelegramDirectly() {
-            sendAnimalTelegramAlert("TEST ANIMAL");
-        }
-
-        function addMessageToStorage(msgText, isAlert) {
-            const time = new Date().toLocaleTimeString();
-            const date = new Date().toLocaleDateString();
-
-            savedMessages.unshift({
-                id: Date.now(),
-                text: msgText,
-                time: `${date} ${time}`,
-                isAlert: isAlert
-            });
-
-            localStorage.setItem('roadGuardian_telegram_logs', JSON.stringify(savedMessages));
-        }
-
-        function renderSavedMessages() {
-            if (savedMessages.length === 0) {
-                messageList.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">No alerts sent yet.</div>';
-                return;
-            }
-
-            let html = '';
-            savedMessages.forEach(msg => {
-                const alertClass = msg.isAlert ? 'alert-mode' : '';
-                html += `
-                    <div class="sms-item ${alertClass}">
-                        <div class="sms-time">🕒 ${msg.time}</div>
-                        <div class="sms-text">${msg.text}</div>
-                    </div>
-                `;
-            });
-
-            messageList.innerHTML = html;
-        }
-
-        const targetAnimals = ['cat', 'dog', 'cow', 'horse', 'sheep', 'elephant', 'bear', 'zebra', 'giraffe'];
-
-        async function detectFrame() {
-            if (model && isCameraActive) {
-                const predictions = await model.detect(video);
-                let isAnimalDetected = false;
-                let detectedName = "";
-
-                predictions.forEach(prediction => {
-                    if (targetAnimals.includes(prediction.class.toLowerCase()) && prediction.score > 0.5) {
-                        isAnimalDetected = true;
-                        detectedName = prediction.class.toUpperCase();
-                    }
-                });
-
-                if (isAnimalDetected) {
-                    statusBox.innerText = `WARNING: ${detectedName} DETECTED!`;
-                    statusBox.classList.add('danger');
-
-                    updateFirebase(1);
-
-                    if (Date.now() - lastTelegramSentTime > 15000) {
-                        sendAnimalTelegramAlert(detectedName);
-                        lastTelegramSentTime = Date.now();
-                    }
-                } else {
-                    statusBox.innerText = "SAFE: ROAD CLEAR";
-                    statusBox.classList.remove('danger');
-                    updateFirebase(0);
-                }
-            }
-            requestAnimationFrame(detectFrame);
-        }
-
-        function clearAllMessages() {
-            if (confirm("Are you sure you want to clear all logs?")) {
-                savedMessages = [];
-                localStorage.removeItem('roadGuardian_telegram_logs');
-                renderSavedMessages();
-                showToast("All Logs Cleared!");
-            }
-        }
-
-        function showToast(msg) {
-            const toast = document.getElementById("toast");
-            toast.innerText = msg;
-            toast.className = "toast show";
-            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
-        }
-
-        async function init() {
-            statusBox.innerText = "Loading AI Model...";
-            try {
-                await setupWebcam();
-                model = await cocoSsd.load();
-                statusBox.innerText = "SAFE: ROAD CLEAR";
-                detectFrame();
-            } catch (err) {
-                statusBox.innerText = "CAMERA ERROR / NO PERMISSION";
-            }
-        }
-
-        window.onload = init;
-    </script>
+        requestAnimationFrame(runHighwayDetection);
+      }
+    };
+  </script>
 </body>
 </html>
