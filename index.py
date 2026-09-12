@@ -11,7 +11,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # Environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8560832618:AAFxHDrVvAEHDR1zKUtK1glQq0RWMsYrWXk")
-DEFAULT_CHAT_ID = "8517706642"  # ⚠️ અહીં તમારો પોતાનો Telegram Chat ID મૂકો
+DEFAULT_CHAT_ID = os.getenv("DEFAULT_CHAT_ID", "8517706642")  # Admin fallback ID
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "jashjani")
 FIREBASE_BASE_URL = os.getenv(
     "FIREBASE_BASE_URL", 
@@ -99,13 +99,14 @@ def verify_and_register_visitor(chat_id, code):
         return True, c_data.get("duration_str", "")
     return False, None
 
+# 🔒 ફક્ત ગ્રાન્ટેડ / ઓથોરાઇઝ્ડ (Admins + Valid Subscribers) યુઝર્સ મેળવવાનું ફંક્શન
 def get_active_recipients():
     recipients = set()
     now = time.time()
 
     root_data = get_firebase_data("")
     if isinstance(root_data, dict):
-        # 1. Add Admins
+        # ૧. માત્ર એડમિન ઉમેરો (Only Admins)
         admins = root_data.get("admins", {})
         if isinstance(admins, dict):
             for admin_id in admins.keys():
@@ -114,7 +115,7 @@ def get_active_recipients():
                 except Exception:
                     pass
 
-        # 2. Add Valid Visitors
+        # ૨. માત્ર વેલિડ પાસ કોડ વાળા યુઝર્સ ઉમેરો (Only Verified Visitors)
         subscribers = root_data.get("subscribers", {})
         if isinstance(subscribers, dict):
             for cid, sdata in subscribers.items():
@@ -126,8 +127,9 @@ def get_active_recipients():
                         except Exception:
                             pass
 
-    # જો Firebase માંથી કોઈ ન મળે તો ફેલસેફ તરીકે DEFAULT_CHAT_ID નો ઉપયોગ કરો
     active_list = list(recipients)
+    
+    # જો કોઈ યુઝર ન હોય, તો ફેલસેફ તરીકે ફક્ત તમારા એકલાના Chat ID ને મોકલશે
     if not active_list and DEFAULT_CHAT_ID:
         active_list = [DEFAULT_CHAT_ID]
 
@@ -171,14 +173,12 @@ def monitoring_keyboard():
 
 def forest_dept_keyboard():
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("📊 Monitoring (Gunshot Alerts)", callback_data="view_gunshots"))
     markup.add(InlineKeyboardButton("📹 Device (Gir Forest Live)", url="https://gir-forest-guardian.vercel.app/"))
     markup.add(InlineKeyboardButton("🔙 Back", callback_data="admin_monitoring"))
     return markup
 
 def highway_dept_keyboard():
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("📊 Monitoring (Animal Detection Alerts)", callback_data="view_animal_alerts"))
     markup.add(InlineKeyboardButton("📹 Device (RoadGuardian AI Dashboard)", url="https://highway-animle-sfaty.vercel.app/"))
     markup.add(InlineKeyboardButton("🔙 Back", callback_data="admin_monitoring"))
     return markup
@@ -228,18 +228,15 @@ def callback_listener(call):
             bot.edit_message_text("📡 *Monitoring System*", chat_id, message_id, parse_mode="Markdown", reply_markup=monitoring_keyboard())
 
         elif call.data == "mon_forest":
-            bot.edit_message_text("🌲 *Forest Department*", chat_id, message_id, parse_mode="Markdown", reply_markup=forest_dept_keyboard())
+            bot.edit_message_text("🌲 *Gir Forest Department Control*", chat_id, message_id, parse_mode="Markdown", reply_markup=forest_dept_keyboard())
 
         elif call.data == "mon_highway":
-            bot.edit_message_text("🛣️ *Highway Department*", chat_id, message_id, parse_mode="Markdown", reply_markup=highway_dept_keyboard())
+            bot.edit_message_text("🛣️ *Highway Safety Department Control*", chat_id, message_id, parse_mode="Markdown", reply_markup=highway_dept_keyboard())
 
         elif call.data == "menu_visitor":
             set_user_state(chat_id, "awaiting_visitor_code")
             bot.send_message(chat_id, "🎟️ *Visitor Access*\nPlease enter your Pass Code:")
 
-        elif call.data in ["view_gunshots", "view_animal_alerts"]:
-            bot.answer_callback_query(call.id, "✅ Subscribed to real-time alerts!")
-            bot.send_message(chat_id, "📡 *Real-time Alerts Active!* You will receive immediate photo notifications when alerts/gunshots are detected.")
     except Exception as e:
         print(f"Error in callback: {e}")
 
@@ -274,16 +271,16 @@ def handle_text_inputs(message):
         if state == "awaiting_visitor_code":
             success, duration = verify_and_register_visitor(chat_id, text)
             if success:
-                bot.reply_to(message, f"🎉 *Visitor Code Verified!*\n\nWelcome! Your Chat ID has been saved.\n⏱️ Access Duration: *{duration}*\n\nYou will now receive live alert photos!", parse_mode="Markdown")
+                bot.reply_to(message, f"🎉 *Access Granted!*\n\nWelcome! Your Telegram Chat ID has been authorized.\n⏱️ Duration: *{duration}*\n\nYou will now receive live alert photos.", parse_mode="Markdown")
             else:
-                bot.reply_to(message, "❌ Invalid or Expired Pass Code!")
+                bot.reply_to(message, "❌ Invalid or Expired Pass Code! Access Denied.")
             clear_user_state(chat_id)
             return
     except Exception as e:
         print(f"Error handling message: {e}")
 
 
-# --- API ROUTES FOR ALERTS ---
+# --- API ROUTES FOR ALERTS (ONLY SENDS TO GRANTED PERSONS) ---
 
 @app.route('/api/alert', methods=['POST'])
 @app.route('/alert', methods=['POST'])
@@ -295,6 +292,7 @@ def receive_alert_from_web():
     photo_file = request.files['photo']
     photo_bytes = photo_file.read()
 
+    # 🔒 ફક્ત ગ્રાન્ટેડ વ્યક્તિઓની સૂચિ લેશે
     recipients = get_active_recipients()
 
     caption = f"🚨 *ROADGUARDIAN HIGHWAY ALERT*\n\n🐾 *Animal Detected:* {animal}\n📍 *Location:* Rajkot-Gondal Highway\n⚠️ *Drive with caution!*"
@@ -309,7 +307,7 @@ def receive_alert_from_web():
         except Exception as e:
             print(f"Failed to send photo to {cid}: {e}")
 
-    return jsonify({"status": "Highway Alert sent", "sent_to": success_count}), 200
+    return jsonify({"status": "Highway Alert sent", "sent_to_granted_users": success_count}), 200
 
 
 @app.route('/api/forest-alert', methods=['POST'])
@@ -322,6 +320,7 @@ def receive_forest_alert():
     photo_file = request.files['photo']
     photo_bytes = photo_file.read()
 
+    # 🔒 ફક્ત ગ્રાન્ટેડ વ્યક્તિઓની સૂચિ લેશે
     recipients = get_active_recipients()
 
     caption = (
@@ -341,7 +340,7 @@ def receive_forest_alert():
         except Exception as e:
             print(f"Failed to send photo to {cid}: {e}")
 
-    return jsonify({"status": "Forest Gunshot Alert sent", "sent_to": success_count}), 200
+    return jsonify({"status": "Forest Gunshot Alert sent", "sent_to_granted_users": success_count}), 200
 
 
 @app.route('/api/webhook', methods=['POST', 'GET'])
@@ -364,4 +363,4 @@ def telegram_webhook():
 
 @app.route('/', methods=['GET'])
 def index_check():
-    return "🚀 RoadGuardian & Gir Forest Vercel Backend Active!", 200
+    return "🚀 RoadGuardian & Gir Forest Vercel Backend Active (Authorized Users Only)!", 200
