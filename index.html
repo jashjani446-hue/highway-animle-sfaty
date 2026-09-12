@@ -140,7 +140,7 @@
 
     // 📋 Separate Templates
     const EMAILJS_TEMPLATE_ID_FOREST = "template_cvp7e1i";
-    const EMAILJS_TEMPLATE_ID_HIGHWAY = "template_1efdzc9"; // 👈 નવો Template ID
+    const EMAILJS_TEMPLATE_ID_HIGHWAY = "template_1efdzc9";
 
     emailjs.init(EMAILJS_PUBLIC_KEY);
 
@@ -184,7 +184,7 @@
       }
     }
 
-    // Capture Snapshot (Optimized for EmailJS)
+    // Capture Snapshot (Optimized for EmailJS & Telegram)
     function grabSnapshot(videoElement) {
       const photoCanvas = document.getElementById('photoCanvas');
       const w = 320; 
@@ -205,7 +205,7 @@
       }
     }
 
-    // 📩 Telegram Photo Alert
+    // 📩 Telegram Photo Alert (Updated for Backend Routing)
     function sendTelegramPhotoAlert(type, videoElem) {
       const liveSnapshot = grabSnapshot(videoElem);
       if (!liveSnapshot) return;
@@ -215,6 +215,7 @@
 
       const formData = new FormData();
       formData.append('photo', blob, 'alert_snapshot.jpg');
+      formData.append('type', type);
 
       let endpoint = "";
       if (type === 'GUNSHOT') {
@@ -230,8 +231,8 @@
         body: formData
       })
       .then(res => res.json())
-      .then(data => console.log("Telegram Sent:", data))
-      .catch(err => console.error("Telegram Error:", err));
+      .then(data => console.log("Telegram Dispatch Status:", data))
+      .catch(err => console.error("Telegram Alert Error:", err));
     }
 
     // 📩 Universal Email Alert Handler
@@ -402,7 +403,7 @@
             highwayBox.className = "status-box alert";
             highwayBox.innerText = "🚨 WARNING: રસ્તા પર પ્રાણી ડિટેક્ટ થયું!";
 
-            // 📩 Highway Email Dispatch (Using template_1efdzc9)
+            // 📩 Highway Email Dispatch
             sendEmailAlert("Highway Patrol Officer", "Animal Detected on Road", highwayVideo, EMAILJS_TEMPLATE_ID_HIGHWAY);
             sendTelegramPhotoAlert("ANIMAL", highwayVideo);
 
