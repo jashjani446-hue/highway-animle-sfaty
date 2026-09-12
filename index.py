@@ -11,7 +11,6 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # Environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8560832618:AAFxHDrVvAEHDR1zKUtK1glQq0RWMsYrWXk")
-DEFAULT_CHAT_ID = os.getenv("DEFAULT_CHAT_ID", "8517706642")  # Admin fallback ID
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "jashjani")
 FIREBASE_BASE_URL = os.getenv(
     "FIREBASE_BASE_URL", 
@@ -99,14 +98,14 @@ def verify_and_register_visitor(chat_id, code):
         return True, c_data.get("duration_str", "")
     return False, None
 
-# 🔒 ફક્ત ગ્રાન્ટેડ / ઓથોરાઇઝ્ડ (Admins + Valid Subscribers) યુઝર્સ મેળવવાનું ફંક્શન
+# 🔒 ફક્ત અને ફક્ત Granted/Authorized વ્યક્તિઓ જ મેળવો
 def get_active_recipients():
     recipients = set()
     now = time.time()
 
     root_data = get_firebase_data("")
     if isinstance(root_data, dict):
-        # ૧. માત્ર એડમિન ઉમેરો (Only Admins)
+        # ૧. માત્ર એડમિન્સ મેળવો
         admins = root_data.get("admins", {})
         if isinstance(admins, dict):
             for admin_id in admins.keys():
@@ -115,25 +114,21 @@ def get_active_recipients():
                 except Exception:
                     pass
 
-        # ૨. માત્ર વેલિડ પાસ કોડ વાળા યુઝર્સ ઉમેરો (Only Verified Visitors)
+        # ૨. માત્ર પાસકોડ વડે વેરીફાય થયેલા યુઝર્સ મેળવો (Active Subscribers)
         subscribers = root_data.get("subscribers", {})
         if isinstance(subscribers, dict):
             for cid, sdata in subscribers.items():
                 if isinstance(sdata, dict):
                     expire_at = sdata.get("expire_at", 0)
-                    if expire_at > now:
+                    if expire_at > now: # જે નો પાસ એક્સપાયર નથી થયો તે જ મોકલાશે
                         try:
                             recipients.add(str(cid))
                         except Exception:
                             pass
 
-    active_list = list(recipients)
-    
-    # જો કોઈ યુઝર ન હોય, તો ફેલસેફ તરીકે ફક્ત તમારા એકલાના Chat ID ને મોકલશે
-    if not active_list and DEFAULT_CHAT_ID:
-        active_list = [DEFAULT_CHAT_ID]
-
-    return active_list
+    # નોંધ: અહીંથી DEFAULT_CHAT_ID ની કન્ડીશન હટાવી દીધી છે.
+    # હવે જો સિસ્ટમમાં કોઈ Granted User નહિ હોય તો ઈમેજ કોઈને મોકલાશે નહીં!
+    return list(recipients)
 
 
 # --- KEYBOARDS (UI) ---
@@ -271,7 +266,7 @@ def handle_text_inputs(message):
         if state == "awaiting_visitor_code":
             success, duration = verify_and_register_visitor(chat_id, text)
             if success:
-                bot.reply_to(message, f"🎉 *Access Granted!*\n\nWelcome! Your Telegram Chat ID has been authorized.\n⏱️ Duration: *{duration}*\n\nYou will now receive live alert photos.", parse_mode="Markdown")
+                bot.reply_to(message, f"🎉 *Access Granted! You are Authorized.*\n\nWelcome! Your Chat ID has been granted to receive alerts.\n⏱️ Duration: *{duration}*", parse_mode="Markdown")
             else:
                 bot.reply_to(message, "❌ Invalid or Expired Pass Code! Access Denied.")
             clear_user_state(chat_id)
@@ -280,7 +275,7 @@ def handle_text_inputs(message):
         print(f"Error handling message: {e}")
 
 
-# --- API ROUTES FOR ALERTS (ONLY SENDS TO GRANTED PERSONS) ---
+# --- API ROUTES FOR ALERTS (STRICTLY FOR GRANTED USERS ONLY) ---
 
 @app.route('/api/alert', methods=['POST'])
 @app.route('/alert', methods=['POST'])
@@ -288,12 +283,13 @@ def receive_alert_from_web():
     if 'photo' not in request.files or 'animal' not in request.form:
         return jsonify({"error": "Missing photo or animal name"}), 400
 
+    recipients = get_active_recipients()
+    if not recipients:
+        return jsonify({"status": "Ignored", "message": "No granted users found to receive this photo."}), 200
+
     animal = request.form['animal']
     photo_file = request.files['photo']
     photo_bytes = photo_file.read()
-
-    # 🔒 ફક્ત ગ્રાન્ટેડ વ્યક્તિઓની સૂચિ લેશે
-    recipients = get_active_recipients()
 
     caption = f"🚨 *ROADGUARDIAN HIGHWAY ALERT*\n\n🐾 *Animal Detected:* {animal}\n📍 *Location:* Rajkot-Gondal Highway\n⚠️ *Drive with caution!*"
 
@@ -307,7 +303,7 @@ def receive_alert_from_web():
         except Exception as e:
             print(f"Failed to send photo to {cid}: {e}")
 
-    return jsonify({"status": "Highway Alert sent", "sent_to_granted_users": success_count}), 200
+    return jsonify({"status": "Highway Alert sent", "sent_to_granted_count": success_count}), 200
 
 
 @app.route('/api/forest-alert', methods=['POST'])
@@ -316,12 +312,13 @@ def receive_forest_alert():
     if 'photo' not in request.files:
         return jsonify({"error": "Missing photo file"}), 400
 
+    recipients = get_active_recipients()
+    if not recipients:
+        return jsonify({"status": "Ignored", "message": "No granted users found to receive this photo."}), 200
+
     sound_label = request.form.get('label', 'GUNSHOT DETECTED')
     photo_file = request.files['photo']
     photo_bytes = photo_file.read()
-
-    # 🔒 ફક્ત ગ્રાન્ટેડ વ્યક્તિઓની સૂચિ લેશે
-    recipients = get_active_recipients()
 
     caption = (
         f"🚨 *GIR FOREST DEPARTMENT CRITICAL ALERT*\n\n"
@@ -340,7 +337,7 @@ def receive_forest_alert():
         except Exception as e:
             print(f"Failed to send photo to {cid}: {e}")
 
-    return jsonify({"status": "Forest Gunshot Alert sent", "sent_to_granted_users": success_count}), 200
+    return jsonify({"status": "Forest Alert sent", "sent_to_granted_count": success_count}), 200
 
 
 @app.route('/api/webhook', methods=['POST', 'GET'])
@@ -363,4 +360,4 @@ def telegram_webhook():
 
 @app.route('/', methods=['GET'])
 def index_check():
-    return "🚀 RoadGuardian & Gir Forest Vercel Backend Active (Authorized Users Only)!", 200
+    return "🚀 Active Backend: Sending ONLY to Granted Persons!", 200
