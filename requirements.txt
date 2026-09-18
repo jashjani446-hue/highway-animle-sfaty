@@ -2,6 +2,3 @@ Flask
 Flask-CORS
 pyTelegramBotAPI
 requests
-qrcode
-Pillow
-pyzbar
