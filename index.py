@@ -10,9 +10,9 @@ from pyzbar.pyzbar import decode
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import telebot
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# Environment variables
+# Environment variables (હાર્ડકોડ કિંમતો fallback તરીકે છે)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8560832618:AAFxHDrVvAEHDR1zKUtK1glQq0RWMsYrWXk")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "jashjani")
 FIREBASE_BASE_URL = os.getenv(
@@ -101,7 +101,6 @@ def verify_and_register_visitor(chat_id, code):
         return True, c_data.get("duration_str", "")
     return False, None
 
-# 🖼️ QR કોડ ઈમેજ જનરેટ કરવા માટેનું ફંક્શન
 def generate_qr_code_stream(data_text):
     qr = qrcode.QRCode(
         version=1,
@@ -118,7 +117,6 @@ def generate_qr_code_stream(data_text):
     img_bytes.seek(0)
     return img_bytes
 
-# 🔒 ફક્ત એક્ટિવ અને ઓથોરાઈઝ્ડ યુઝર્સ મેળવો
 def get_active_recipients():
     recipients = set()
     now = time.time()
@@ -252,7 +250,6 @@ def callback_listener(call):
         print(f"Error in callback: {e}")
 
 
-# 📸 ૧. QR કોડનો ફોટો હેન્ડલ કરવા માટેનો હેન્ડલર (PHOTO HANDLER)
 @bot.message_handler(content_types=['photo'])
 def handle_photo_inputs(message):
     chat_id = message.chat.id
@@ -260,11 +257,9 @@ def handle_photo_inputs(message):
 
     if state == "awaiting_visitor_code":
         try:
-            # ટેલિગ્રામમાંથી ઈમેજ ફાઈલ ડાઉનલોડ કરો
             file_info = bot.get_file(message.photo[-1].file_id)
             downloaded_file = bot.download_file(file_info.file_path)
             
-            # ઈમેજમાંથી QR ડેટા ઉકેલો
             image = Image.open(io.BytesIO(downloaded_file))
             decoded_objects = decode(image)
 
@@ -286,7 +281,6 @@ def handle_photo_inputs(message):
             bot.reply_to(message, "❌ Failed to read QR image. Please send the text code instead.")
 
 
-# 💬 ૨. ટેક્સ્ટ ઇનપુટ હેન્ડલર (TEXT HANDLER)
 @bot.message_handler(func=lambda message: True)
 def handle_text_inputs(message):
     chat_id = message.chat.id
@@ -312,7 +306,6 @@ def handle_text_inputs(message):
 
             save_visitor_code(code, phone, duration)
             
-            # QR કોડ જનરેટ કરીને મોકલો
             qr_stream = generate_qr_code_stream(code)
             qr_stream.name = 'visitor_qr.png'
 
@@ -340,9 +333,8 @@ def handle_text_inputs(message):
         print(f"Error handling message: {e}")
 
 
-# --- API ROUTES FOR ALERTS ---
+# --- API ROUTES FOR ALERTS & WEBHOOKS ---
 
-@app.route('/api/alert', methods=['POST'])
 @app.route('/alert', methods=['POST'])
 def receive_alert_from_web():
     if 'photo' not in request.files or 'animal' not in request.form:
@@ -371,7 +363,6 @@ def receive_alert_from_web():
     return jsonify({"status": "Highway Alert sent", "sent_to_granted_count": success_count}), 200
 
 
-@app.route('/api/forest-alert', methods=['POST'])
 @app.route('/forest-alert', methods=['POST'])
 def receive_forest_alert():
     if 'photo' not in request.files:
@@ -405,11 +396,10 @@ def receive_forest_alert():
     return jsonify({"status": "Forest Alert sent", "sent_to_granted_count": success_count}), 200
 
 
-@app.route('/api/webhook', methods=['POST', 'GET'])
 @app.route('/webhook', methods=['POST', 'GET'])
 def telegram_webhook():
     if request.method == 'GET':
-        return "Webhook is active!", 200
+        return "Webhook Endpoint Ready!", 200
 
     if request.headers.get('content-type') == 'application/json':
         try:
@@ -425,4 +415,7 @@ def telegram_webhook():
 
 @app.route('/', methods=['GET'])
 def index_check():
-    return "🚀 Active Backend: QR Code Generator & Reader Enabled!", 200
+    return "🚀 Road Guardian Vercel App Active!", 200
+
+# Vercel Serverless Entrypoint (Direct root expose)
+app_instance = app
