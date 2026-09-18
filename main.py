@@ -8,7 +8,14 @@ import requests
 from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
 import telebot
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from telebot.types import (
+    InlineKeyboardMarkup, 
+    InlineKeyboardButton, 
+    ReplyKeyboardMarkup, 
+    KeyboardButton, 
+    WebAppInfo, 
+    ReplyKeyboardRemove
+)
 
 # Environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8560832618:AAFxHDrVvAEHDR1zKUtK1glQq0RWMsYrWXk")
@@ -90,10 +97,14 @@ SCANNER_HTML = """
       if (isProcessing) return;
       isProcessing = true;
 
-      document.getElementById('status-text').innerHTML = `<span style="color:#4ade80;">✅ Pass Scanned! Processing Access...</span>`;
+      document.getElementById('status-text').innerHTML = `<span style="color:#4ade80;">✅ Pass Scanned! Verifying...</span>`;
 
-      // Native Telegram WebApp method to transmit scanned QR text back to the bot
-      tg.sendData(decodedText);
+      try {
+        // Required for ReplyKeyboardButton WebApps to pass data back to bot
+        tg.sendData(decodedText);
+      } catch (e) {
+        document.getElementById('status-text').innerHTML = `<span style="color:#ef4444;">❌ Telegram Bridge Error</span>`;
+      }
     }
 
     let html5QrcodeScanner = new Html5QrcodeScanner(
@@ -218,12 +229,17 @@ def get_active_recipients():
 
 # --- TELEGRAM BOT UI & KEYBOARDS ---
 
-def main_menu_keyboard(chat_id):
+def main_menu_keyboard():
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("🛠️ Admin Panel", callback_data="menu_admin"))
-    
+    markup.add(InlineKeyboardButton("👤 Visitor Access Options", callback_data="menu_visitor"))
+    return markup
+
+def visitor_keyboard():
+    # ReplyKeyboardMarkup is mandatory for WebApp sendData() support
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     scanner_url = f"{SERVER_URL}/scanner"
-    markup.add(InlineKeyboardButton("📷 Visitor Access (Scan QR)", web_app=WebAppInfo(url=scanner_url)))
+    markup.add(KeyboardButton("📷 Open QR Camera Scanner", web_app=WebAppInfo(url=scanner_url)))
     return markup
 
 def admin_menu_keyboard():
@@ -264,7 +280,7 @@ def send_welcome(message):
             chat_id, 
             "🏠 *RoadGuardian Safety Control System*\n\nPlease choose an option:", 
             parse_mode="Markdown", 
-            reply_markup=main_menu_keyboard(chat_id)
+            reply_markup=main_menu_keyboard()
         )
     except Exception as e:
         print(f"Error in send_welcome: {e}")
@@ -276,7 +292,15 @@ def callback_listener(call):
 
     try:
         if call.data == "menu_main":
-            bot.edit_message_text("🏠 *Main Menu*", chat_id, message_id, parse_mode="Markdown", reply_markup=main_menu_keyboard(chat_id))
+            bot.edit_message_text("🏠 *Main Menu*", chat_id, message_id, parse_mode="Markdown", reply_markup=main_menu_keyboard())
+
+        elif call.data == "menu_visitor":
+            bot.send_message(
+                chat_id, 
+                "📲 Tap the **Open QR Camera Scanner** button below your chat input to open the camera, or simply type your pass code manually:", 
+                parse_mode="Markdown", 
+                reply_markup=visitor_keyboard()
+            )
 
         elif call.data == "menu_admin":
             if not is_admin(chat_id):
@@ -300,25 +324,29 @@ def callback_listener(call):
     except Exception as e:
         print(f"Error in callback: {e}")
 
-# Captures data submitted via Telegram.WebApp.sendData()
+# Catches data sent from ReplyKeyboardButton WebApps
 @bot.message_handler(content_types=['web_app_data'])
 def handle_web_app_data(message):
     chat_id = message.chat.id
     scanned_code = message.web_app_data.data.strip()
 
-    if scanned_code.startswith("PASS-"):
-        success, duration = verify_and_register_visitor(chat_id, scanned_code)
-        if success:
-            bot.reply_to(
-                message, 
-                f"🎉 *Access Granted! You are Authorized.*\n\n"
-                f"Welcome! Your Chat ID `{chat_id}` has been saved in Firebase.\n"
-                f"⏱️ Active Duration: *{duration}*", 
-                parse_mode="Markdown"
-            )
-        else:
-            bot.reply_to(message, "❌ Invalid or Expired Pass Code! Access Denied.")
-        clear_user_state(chat_id)
+    success, duration = verify_and_register_visitor(chat_id, scanned_code)
+    if success:
+        bot.reply_to(
+            message, 
+            f"🎉 *Access Granted! You are Authorized.*\n\n"
+            f"Your Chat ID `{chat_id}` is saved in Firebase!\n"
+            f"⏱️ Active Duration: *{duration}*", 
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardRemove()
+        )
+    else:
+        bot.reply_to(
+            message, 
+            "❌ Invalid or Expired Pass Code! Access Denied.",
+            reply_markup=ReplyKeyboardRemove()
+        )
+    clear_user_state(chat_id)
 
 @bot.message_handler(func=lambda message: True)
 def handle_text_inputs(message):
@@ -363,12 +391,17 @@ def handle_text_inputs(message):
                 bot.reply_to(
                     message, 
                     f"🎉 *Access Granted! You are Authorized.*\n\n"
-                    f"Welcome! Your Chat ID `{chat_id}` has been saved in Firebase.\n"
+                    f"Your Chat ID `{chat_id}` is saved in Firebase!\n"
                     f"⏱️ Active Duration: *{duration}*", 
-                    parse_mode="Markdown"
+                    parse_mode="Markdown",
+                    reply_markup=ReplyKeyboardRemove()
                 )
             else:
-                bot.reply_to(message, "❌ Invalid or Expired Pass Code! Access Denied.")
+                bot.reply_to(
+                    message, 
+                    "❌ Invalid or Expired Pass Code! Access Denied.",
+                    reply_markup=ReplyKeyboardRemove()
+                )
             clear_user_state(chat_id)
             return
 
