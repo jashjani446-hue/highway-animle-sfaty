@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RoadGuardian - Professional QR Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #0f172a; color: white; text-align: center; padding: 20px; }
+    #reader { width: 100%; max-width: 450px; margin: auto; border: 2px solid #38bdf8; border-radius: 12px; overflow: hidden; }
+    .status { margin-top: 15px; font-size: 18px; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <h2>🎥 Visitor QR Code Live Scanner</h2>
+  <div id="reader"></div>
+  <div class="status" id="result">Scanning for QR code...</div>
+
+  <script>
+    function onScanSuccess(decodedText, decodedResult) {
+      document.getElementById('result').innerHTML = `<span style="color:#4ade80;">✅ Scanned: ${decodedText}</span>`;
+      alert("Scanned Pass Code: " + decodedText + "\n\nPlease send this code to your Telegram Bot!");
+    }
+
+    let html5QrcodeScanner = new Html5QrcodeScanner(
+      "reader", { fps: 10, qrbox: { width: 250, height: 250 } }, false);
+    html5QrcodeScanner.render(onScanSuccess);
+  </script>
+</body>
+</html>
