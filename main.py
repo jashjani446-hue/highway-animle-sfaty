@@ -23,7 +23,7 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = Flask(__name__)
 CORS(app)
 
-# --- DIRECT CAMERA SCANNER WEBAPP HTML ---
+# --- DIRECT CAMERA QR SCANNER WEBAPP HTML ---
 SCANNER_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -35,7 +35,7 @@ SCANNER_HTML = """
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: Arial, sans-serif;
       background: #0f172a;
       color: white;
       margin: 0;
@@ -67,14 +67,14 @@ SCANNER_HTML = """
       margin-top: 15px;
       font-size: 14px;
       color: #38bdf8;
-      font-weight: 600;
+      font-weight: bold;
     }
   </style>
 </head>
 <body>
   <div class="scanner-card">
-    <h3 style="margin: 0;">📷 Scanning Visitor Pass</h3>
-    <p style="color: #94a3b8; font-size: 12px; margin-top: 5px;">Point your camera at the Pass QR Code</p>
+    <h3 style="margin:0;">📷 Scanning Visitor Pass</h3>
+    <p style="color: #94a3b8; font-size: 12px; margin-top: 5px;">Scan QR to grant safety access</p>
     <div id="reader"></div>
     <div class="status" id="status-text">Initializing Camera...</div>
   </div>
@@ -84,43 +84,21 @@ SCANNER_HTML = """
     tg.ready();
     tg.expand();
 
-    const botToken = "{{ bot_token }}";
     let isProcessing = false;
 
-    async function onScanSuccess(decodedText) {
+    function onScanSuccess(decodedText) {
       if (isProcessing) return;
       isProcessing = true;
 
-      document.getElementById('status-text').innerHTML = `<span style="color:#4ade80;">✅ Code Scanned! Verifying...</span>`;
+      document.getElementById('status-text').innerHTML = `<span style="color:#4ade80;">✅ Pass Scanned! Processing Access...</span>`;
 
-      const user = tg.initDataUnsafe?.user;
-      const chatId = user ? user.id : null;
-
-      if (chatId) {
-        try {
-          // Direct API Call to send the code into the chat on behalf of user action
-          await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: chatId,
-              text: decodedText
-            })
-          });
-        } catch (e) {
-          console.error("API Send Error:", e);
-        }
-      }
-
-      // Close the scanner and return to Telegram chat
-      setTimeout(() => {
-        tg.close();
-      }, 300);
+      // Native Telegram WebApp method to transmit scanned QR text back to the bot
+      tg.sendData(decodedText);
     }
 
     let html5QrcodeScanner = new Html5QrcodeScanner(
       "reader", 
-      { fps: 10, qrbox: { width: 220, height: 220 }, facingMode: "environment" }, 
+      { fps: 15, qrbox: { width: 220, height: 220 }, facingMode: "environment" }, 
       false
     );
     html5QrcodeScanner.render(onScanSuccess);
@@ -244,14 +222,13 @@ def main_menu_keyboard(chat_id):
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("🛠️ Admin Panel", callback_data="menu_admin"))
     
-    # Directly opening camera scanner when Visitor Access is clicked
     scanner_url = f"{SERVER_URL}/scanner"
-    markup.add(InlineKeyboardButton("👤 Visitor Access (Scan QR)", web_app=WebAppInfo(url=scanner_url)))
+    markup.add(InlineKeyboardButton("📷 Visitor Access (Scan QR)", web_app=WebAppInfo(url=scanner_url)))
     return markup
 
 def admin_menu_keyboard():
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("🔑 Make Pass Code", callback_data="admin_make_code"))
+    markup.add(InlineKeyboardButton("🔑 Make Code of Visitor", callback_data="admin_make_code"))
     markup.add(InlineKeyboardButton("📡 Monitoring Control", callback_data="admin_monitoring"))
     markup.add(InlineKeyboardButton("🔙 Back to Main", callback_data="menu_main"))
     return markup
@@ -303,7 +280,7 @@ def callback_listener(call):
 
         elif call.data == "menu_admin":
             if not is_admin(chat_id):
-                bot.answer_callback_query(call.id, "🔒 Enter Admin Password in chat!")
+                bot.answer_callback_query(call.id, "🔒 Enter admin password in chat first!")
                 set_user_state(chat_id, "awaiting_admin_password")
                 bot.send_message(chat_id, "🔐 Please enter the **Admin Password**:")
             else:
@@ -323,6 +300,25 @@ def callback_listener(call):
     except Exception as e:
         print(f"Error in callback: {e}")
 
+# Captures data submitted via Telegram.WebApp.sendData()
+@bot.message_handler(content_types=['web_app_data'])
+def handle_web_app_data(message):
+    chat_id = message.chat.id
+    scanned_code = message.web_app_data.data.strip()
+
+    if scanned_code.startswith("PASS-"):
+        success, duration = verify_and_register_visitor(chat_id, scanned_code)
+        if success:
+            bot.reply_to(
+                message, 
+                f"🎉 *Access Granted! You are Authorized.*\n\n"
+                f"Welcome! Your Chat ID `{chat_id}` has been saved in Firebase.\n"
+                f"⏱️ Active Duration: *{duration}*", 
+                parse_mode="Markdown"
+            )
+        else:
+            bot.reply_to(message, "❌ Invalid or Expired Pass Code! Access Denied.")
+        clear_user_state(chat_id)
 
 @bot.message_handler(func=lambda message: True)
 def handle_text_inputs(message):
@@ -331,7 +327,6 @@ def handle_text_inputs(message):
     state = get_user_state(chat_id)
 
     try:
-        # 🔑 Admin Password Verification
         if text == ADMIN_PASSWORD:
             add_admin(chat_id)
             bot.reply_to(message, "🎉 *Admin Access Granted!*", parse_mode="Markdown", reply_markup=admin_menu_keyboard())
@@ -339,11 +334,10 @@ def handle_text_inputs(message):
             return
 
         if state == "awaiting_admin_password":
-            bot.reply_to(message, "❌ Incorrect Password! Try again.")
+            bot.reply_to(message, "❌ Incorrect Password!")
             clear_user_state(chat_id)
             return
 
-        # 🎫 Generate Visitor Pass Code With QR Image
         if isinstance(state, dict) and state.get("action") == "awaiting_phone":
             duration = state.get("duration")
             phone = text
@@ -353,72 +347,70 @@ def handle_text_inputs(message):
             qr_url = get_qr_api_url(code)
 
             caption = (
-                f"✅ *Visitor Pass Code Created!*\n\n"
+                f"✅ *Visitor Pass Created!*\n\n"
                 f"🎟️ Pass Code: `{code}`\n"
                 f"📱 Phone: {phone}\n"
                 f"⏱️ Duration: {duration}\n\n"
-                f"📲 *Scan this QR code using Visitor Access button to authorize access.*"
+                f"📲 *Scan this QR Code via 'Visitor Access' to register automatically.*"
             )
             bot.send_photo(chat_id, photo=qr_url, caption=caption, parse_mode="Markdown")
             clear_user_state(chat_id)
             return
 
-        # 🎟️ Direct QR Code Check (Triggered via Camera Scan or Manual Paste)
         if text.startswith("PASS-"):
             success, duration = verify_and_register_visitor(chat_id, text)
             if success:
-                bot.reply_to(message, f"🎉 *Access Granted! You are now Authorized.*\n\nWelcome! You will now receive live safety alerts on this chat.\n⏱️ Duration: *{duration}*", parse_mode="Markdown")
+                bot.reply_to(
+                    message, 
+                    f"🎉 *Access Granted! You are Authorized.*\n\n"
+                    f"Welcome! Your Chat ID `{chat_id}` has been saved in Firebase.\n"
+                    f"⏱️ Active Duration: *{duration}*", 
+                    parse_mode="Markdown"
+                )
             else:
                 bot.reply_to(message, "❌ Invalid or Expired Pass Code! Access Denied.")
             clear_user_state(chat_id)
             return
 
     except Exception as e:
-        print(f"Error handling message: {e}")
+        print(f"Error handling text input: {e}")
 
 
-# --- FLASK ROUTES & API ENDPOINTS ---
+# --- FLASK SERVER & WEBHOOK ROUTES ---
 
 @app.route('/scanner', methods=['GET'])
 def serve_scanner():
-    return render_template_string(SCANNER_HTML, bot_token=BOT_TOKEN)
+    return render_template_string(SCANNER_HTML)
 
-# 🛣️ Highway Alert API Route
 @app.route('/api/alert', methods=['POST'])
 @app.route('/alert', methods=['POST'])
-def receive_highway_alert():
-    if 'photo' not in request.files:
-        return jsonify({"error": "Missing photo file"}), 400
+def receive_alert_from_web():
+    if 'photo' not in request.files or 'animal' not in request.form:
+        return jsonify({"error": "Missing photo or animal name"}), 400
 
     recipients = get_active_recipients()
     if not recipients:
-        return jsonify({"status": "Ignored", "message": "No granted users found to receive alert."}), 200
+        return jsonify({"status": "Ignored", "message": "No granted users found in Firebase."}), 200
 
-    animal = request.form.get('animal', 'ANIMAL ON ROAD')
+    animal = request.form['animal']
     photo_file = request.files['photo']
     photo_bytes = photo_file.read()
 
-    caption = (
-        f"🚨 *ROADGUARDIAN HIGHWAY ALERT*\n\n"
-        f"🐾 *Detected Threat:* {animal}\n"
-        f"📍 *Location:* Rajkot-Gondal Highway\n"
-        f"⚠️ *Drive with caution!*"
-    )
+    caption = f"🚨 *ROADGUARDIAN HIGHWAY ALERT*\n\n🐾 *Animal Detected:* {animal}\n📍 *Location:* Rajkot-Gondal Highway\n⚠️ *Drive with caution!*"
 
     success_count = 0
     for cid in recipients:
         try:
             photo_stream = io.BytesIO(photo_bytes)
-            photo_stream.name = 'highway_alert.jpg'
+            photo_stream.name = 'alert.jpg'
             bot.send_photo(chat_id=cid, photo=photo_stream, caption=caption, parse_mode="Markdown")
             success_count += 1
         except Exception as e:
             print(f"Failed sending alert to {cid}: {e}")
 
-    return jsonify({"status": "Highway Alert sent", "sent_to_count": success_count}), 200
+    return jsonify({"status": "Highway Alert sent", "sent_to_granted_count": success_count}), 200
 
 
-# 🌲 Forest Alert API Route
 @app.route('/api/forest-alert', methods=['POST'])
 @app.route('/forest-alert', methods=['POST'])
 def receive_forest_alert():
@@ -427,7 +419,7 @@ def receive_forest_alert():
 
     recipients = get_active_recipients()
     if not recipients:
-        return jsonify({"status": "Ignored", "message": "No granted users found to receive alert."}), 200
+        return jsonify({"status": "Ignored", "message": "No granted users found in Firebase."}), 200
 
     sound_label = request.form.get('label', 'GUNSHOT DETECTED')
     photo_file = request.files['photo']
@@ -450,10 +442,9 @@ def receive_forest_alert():
         except Exception as e:
             print(f"Failed sending alert to {cid}: {e}")
 
-    return jsonify({"status": "Forest Alert sent", "sent_to_count": success_count}), 200
+    return jsonify({"status": "Forest Alert sent", "sent_to_granted_count": success_count}), 200
 
 
-# 📡 Telegram Webhook Route
 @app.route('/api/webhook', methods=['POST', 'GET'])
 @app.route('/webhook', methods=['POST', 'GET'])
 def telegram_webhook():
