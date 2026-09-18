@@ -1,426 +1,363 @@
-<!DOCTYPE html>
-<html lang="gu">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>સ્માર્ટ સેફ્ટી કંટ્રોલ - ફોરેસ્ટ & હાઇવે</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background-color: #121212; color: #ffffff; font-family: 'Segoe UI', Arial, sans-serif; text-align: center; }
+import os
+import random
+import string
+import time
+import io
+import requests
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-    /* હોમ પેજ (બે ભાગ) */
-    .home-container {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      padding: 30px 20px;
-      max-width: 500px;
-      margin: 0 auto;
+# Environment variables
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8560832618:AAFxHDrVvAEHDR1zKUtK1glQq0RWMsYrWXk")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "jashjani")
+FIREBASE_BASE_URL = os.getenv(
+    "FIREBASE_BASE_URL", 
+    "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian"
+)
+
+bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
+app = Flask(__name__)
+CORS(app)
+
+# --- FIREBASE HELPER FUNCTIONS ---
+
+def set_firebase_data(path, data):
+    try:
+        url = f"{FIREBASE_BASE_URL}/{path}.json"
+        requests.put(url, json=data, timeout=5)
+    except Exception as e:
+        print(f"Firebase Set Error: {e}")
+
+def get_firebase_data(path):
+    try:
+        url = f"{FIREBASE_BASE_URL}/{path}.json"
+        res = requests.get(url, timeout=5)
+        if res.ok and res.json() is not None:
+            return res.json()
+    except Exception as e:
+        print(f"Firebase Get Error: {e}")
+    return {}
+
+def is_admin(chat_id):
+    admins = get_firebase_data("admins")
+    if isinstance(admins, dict):
+        return str(chat_id) in admins
+    return False
+
+def add_admin(chat_id):
+    set_firebase_data(f"admins/{str(chat_id)}", True)
+
+def set_user_state(chat_id, state):
+    set_firebase_data(f"user_states/{str(chat_id)}", state)
+
+def get_user_state(chat_id):
+    return get_firebase_data(f"user_states/{str(chat_id)}")
+
+def clear_user_state(chat_id):
+    try:
+        url = f"{FIREBASE_BASE_URL}/user_states/{str(chat_id)}.json"
+        requests.delete(url, timeout=5)
+    except Exception as e:
+        print(f"Firebase Delete Error: {e}")
+
+def save_visitor_code(code, phone, duration_str):
+    seconds_map = {
+        "10m": 10 * 60,
+        "1h": 3600,
+        "5h": 5 * 3600,
+        "10h": 10 * 3600,
+        "24h": 24 * 3600,
+        "always": 100 * 365 * 86400
     }
-    .dept-card {
-      background: #1e1e1e;
-      border: 2px solid #333;
-      border-radius: 16px;
-      padding: 30px 20px;
-      cursor: pointer;
-      transition: 0.3s;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    dur_sec = seconds_map.get(str(duration_str).lower(), 3600)
+
+    code_data = {
+        "phone": phone,
+        "duration_str": duration_str,
+        "dur_sec": dur_sec,
+        "created_at": time.time()
     }
-    .dept-card:hover {
-      border-color: #00e676;
-      transform: translateY(-3px);
-    }
-    .dept-card h2 { font-size: 22px; margin-bottom: 10px; color: #00e676; }
-    .dept-card p { font-size: 14px; color: #ccc; }
+    set_firebase_data(f"codes/{code}", code_data)
 
-    /* વિભાગીય પેજ */
-    .dept-page { display: none; padding: 20px; max-width: 500px; margin: 0 auto; }
-    .active-page { display: block; }
+def verify_and_register_visitor(chat_id, code):
+    codes = get_firebase_data("codes")
+    if isinstance(codes, dict) and code in codes:
+        c_data = codes[code]
+        dur_sec = c_data.get("dur_sec", 3600)
+        expire_timestamp = time.time() + dur_sec
 
-    .btn-back {
-      background: #333;
-      color: #fff;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: bold;
-      margin-bottom: 15px;
-      float: left;
-    }
-
-    .card { background: #1e1e1e; border-radius: 12px; padding: 20px; margin-top: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); clear: both; }
-    .status-box { padding: 20px; margin-top: 10px; font-size: 18px; font-weight: bold; border-radius: 8px; transition: 0.3s; }
-    .safe { background-color: #2e7d32; color: #ffffff; }
-    .alert { background-color: #c62828; color: #ffffff; animation: blink 0.8s infinite; }
-    @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
-
-    .webcam-box { position: relative; border: 2px solid #2e7d32; border-radius: 8px; overflow: hidden; background: #000; margin-top: 15px; min-height: 240px; }
-    video, canvas { width: 100%; height: auto; display: block; }
-
-    .btn-start { background: #00e676; color: #000; border: none; padding: 12px 24px; font-weight: bold; font-size: 16px; border-radius: 6px; cursor: pointer; margin-bottom: 15px; width: 100%; }
-    .label-box { margin-top: 10px; text-align: left; font-size: 14px; color: #00e676; background: #111; padding: 10px; border-radius: 6px; min-height: 50px; }
-  </style>
-</head>
-<body>
-
-  <!-- ૧. પ્રથમ પેજ: બે અલગ વિભાગ પસંદગી -->
-  <div id="homePage" class="active-page">
-    <h1 style="margin-top: 30px; margin-bottom: 10px;">સ્માર્ટ સેફ્ટી કંટ્રોલ</h1>
-    <p style="color: #aaa; margin-bottom: 20px;">કૃપા કરીને તમારો ડિપાર્ટમેન્ટ પસંદ કરો</p>
-
-    <div class="home-container">
-      <div class="dept-card" onclick="openDepartment('forest')">
-        <h2>🌳 ગીર ફોરેસ્ટ ડિપાર્ટમેન્ટ</h2>
-        <p>Anti-Clap Gunshot Detection (બંદૂકના અવાજની ઓળખ)</p>
-      </div>
-
-      <div class="dept-card" onclick="openDepartment('highway')">
-        <h2>🛣️ હાઇવે ડિપાર્ટમેન્ટ</h2>
-        <p>Animal Detection (રસ્તા પર તમામ પ્રાણીઓની ઓળખ)</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- ૨. ફોરેસ્ટ ડિપાર્ટમેન્ટ પેજ -->
-  <div id="forestPage" class="dept-page">
-    <button class="btn-back" onclick="goHome()">⬅️ પાછા જાઓ</button>
-    <div class="card">
-      <h2>🌳 ગીર ફોરેસ્ટ ગનશૂટ સિસ્ટમ</h2>
-      <button class="btn-start" id="startForestBtn" onclick="startForestSystem()">▶️ ફોરેસ્ટ કેમેરા & ઓડિયો શરૂ કરો</button>
-      <div id="forestStatus" class="status-box safe">સિસ્ટમ તૈયાર છે - START દબાવો</div>
-      <div class="webcam-box">
-        <video id="forestWebcam" autoplay playsinline muted></video>
-      </div>
-      <div id="label-container-forest" class="label-box">ઓડિયો વિશ્લેષણ અહીં દેખાશે...</div>
-    </div>
-  </div>
-
-  <!-- ૩. હાઇવે ડિપાર્ટમેન્ટ પેજ -->
-  <div id="highwayPage" class="dept-page">
-    <button class="btn-back" onclick="goHome()">⬅️ પાછા જાઓ</button>
-    <div class="card">
-      <h2>🛣️ હાઇવે સેફ્ટી સિસ્ટમ</h2>
-      <button class="btn-start" id="startHighwayBtn" onclick="startHighwaySystem()">▶️ હાઇવે કેમેરા શરૂ કરો</button>
-      <div id="highwayStatus" class="status-box safe">સિસ્ટમ તૈયાર છે - START દબાવો</div>
-      <div class="webcam-box">
-        <video id="highwayWebcam" autoplay playsinline muted style="width:100%; height:auto;"></video>
-      </div>
-      <div id="label-container-highway" class="label-box">ડિટેક્ટ થયેલા પ્રાણીઓ અહીં દેખાશે...</div>
-    </div>
-  </div>
-
-  <!-- હિડન સ્નેપશોટ કેન્વાસ -->
-  <canvas id="photoCanvas" style="display:none;"></canvas>
-
-  <!-- External JS Libraries -->
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.4.0/dist/speech-commands.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
-
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
-    // 🔗 Backend URL
-    const BACKEND_URL = "https://highway-animle-sfaty.vercel.app";
-
-    // Firebase Config
-    const firebaseConfig = {
-      databaseURL: "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-
-    // 🔑 SAME EmailJS Keys for both Departments
-    const EMAILJS_SERVICE_ID = "service_ejth1ry";
-    const EMAILJS_PUBLIC_KEY = "nD62NJ1rVHL_1RsbX";
-
-    // 📋 Separate Templates
-    const EMAILJS_TEMPLATE_ID_FOREST = "template_b3kykei";
-    const EMAILJS_TEMPLATE_ID_HIGHWAY = "template_rpb472o";
-
-    emailjs.init(EMAILJS_PUBLIC_KEY);
-
-    const FOREST_MODEL_URL = "https://teachablemachine.withgoogle.com/models/DLoC1yucZ/";
-
-    let isForestAlerting = false;
-    let isHighwayAlerting = false;
-    let cocoModel = null;
-
-    // Navigation Functions
-    window.openDepartment = function(dept) {
-      document.getElementById('homePage').classList.remove('active-page');
-      if (dept === 'forest') {
-        document.getElementById('forestPage').classList.add('active-page');
-      } else if (dept === 'highway') {
-        document.getElementById('highwayPage').classList.add('active-page');
-      }
-    };
-
-    window.goHome = function() {
-      document.getElementById('forestPage').classList.remove('active-page');
-      document.getElementById('highwayPage').classList.remove('active-page');
-      document.getElementById('homePage').classList.add('active-page');
-    };
-
-    // Helper: Base64 to Blob
-    function dataURLtoBlob(dataurl) {
-      try {
-        let arr = dataurl.split(','),
-            mime = arr[0].match(/:(.*?);/)[1],
-            bstr = atob(arr[1]), 
-            n = bstr.length, 
-            u8arr = new Uint8Array(n);
-        while(n--){
-            u8arr[n] = bstr.charCodeAt(n);
+        subscriber_data = {
+            "code": code,
+            "phone": c_data.get("phone", ""),
+            "duration": c_data.get("duration_str", ""),
+            "expire_at": expire_timestamp
         }
-        return new Blob([u8arr], {type:mime});
-      } catch(e) {
-        console.error("DataURL Blob Error:", e);
-        return null;
-      }
-    }
+        set_firebase_data(f"subscribers/{str(chat_id)}", subscriber_data)
+        return True, c_data.get("duration_str", "")
+    return False, None
 
-    // Capture Snapshot (Optimized for EmailJS & Telegram)
-    function grabSnapshot(videoElement) {
-      const photoCanvas = document.getElementById('photoCanvas');
-      const w = 320; 
-      const h = 240; 
-      photoCanvas.width = w;
-      photoCanvas.height = h;
-      const ctx = photoCanvas.getContext('2d');
-      try {
-        if (videoElement && videoElement.readyState >= 2) {
-          ctx.drawImage(videoElement, 0, 0, w, h);
-          return photoCanvas.toDataURL('image/jpeg', 0.4);
-        } else {
-          return "";
-        }
-      } catch (e) {
-        console.error("Snapshot Error:", e);
-        return "";
-      }
-    }
+def get_active_recipients():
+    recipients = set()
+    now = time.time()
 
-    // 📩 Telegram Photo Alert (Updated for Backend Routing)
-    function sendTelegramPhotoAlert(type, videoElem) {
-      const liveSnapshot = grabSnapshot(videoElem);
-      if (!liveSnapshot) return;
+    root_data = get_firebase_data("")
+    if isinstance(root_data, dict):
+        admins = root_data.get("admins", {})
+        if isinstance(admins, dict):
+            for admin_id in admins.keys():
+                try:
+                    recipients.add(str(admin_id))
+                except Exception:
+                    pass
 
-      const blob = dataURLtoBlob(liveSnapshot);
-      if (!blob) return;
+        subscribers = root_data.get("subscribers", {})
+        if isinstance(subscribers, dict):
+            for cid, sdata in subscribers.items():
+                if isinstance(sdata, dict):
+                    expire_at = sdata.get("expire_at", 0)
+                    if expire_at > now:
+                        try:
+                            recipients.add(str(cid))
+                        except Exception:
+                            pass
 
-      const formData = new FormData();
-      formData.append('photo', blob, 'alert_snapshot.jpg');
-      formData.append('type', type);
+    return list(recipients)
 
-      let endpoint = "";
-      if (type === 'GUNSHOT') {
-        endpoint = `${BACKEND_URL}/api/forest-alert`;
-        formData.append('label', 'GUNSHOT DETECTED');
-      } else {
-        endpoint = `${BACKEND_URL}/api/alert`;
-        formData.append('animal', 'ANIMAL ON ROAD');
-      }
 
-      fetch(endpoint, {
-        method: 'POST',
-        body: formData
-      })
-      .then(res => res.json())
-      .then(data => console.log("Telegram Dispatch Status:", data))
-      .catch(err => console.error("Telegram Alert Error:", err));
-    }
+# --- TELEGRAM BOT UI & KEYBOARDS ---
 
-    // 📩 Universal Email Alert Handler
-    function sendEmailAlert(target, alertDetail, videoElem, templateId) {
-      const timeString = new Date().toLocaleString();
-      const liveSnapshot = grabSnapshot(videoElem);
+def main_menu_keyboard(chat_id):
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("🛠️ Admin Panel", callback_data="menu_admin"))
+    markup.add(InlineKeyboardButton("👤 Visitor Access", callback_data="menu_visitor"))
+    return markup
 
-      if (!liveSnapshot) {
-        console.error("Email Cancelled: Image snapshot error");
-        return;
-      }
+def admin_menu_keyboard():
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("🔑 Make Pass Code", callback_data="admin_make_code"))
+    markup.add(InlineKeyboardButton("📡 Monitoring Control", callback_data="admin_monitoring"))
+    markup.add(InlineKeyboardButton("🔙 Back to Main", callback_data="menu_main"))
+    return markup
 
-      const templateParams = {
-        to_name: target,
-        alert_time: timeString,
-        image_data: liveSnapshot,
-        message: alertDetail
-      };
+def duration_keyboard():
+    markup = InlineKeyboardMarkup(row_width=3)
+    markup.add(
+        InlineKeyboardButton("10m", callback_data="dur_10m"),
+        InlineKeyboardButton("1h", callback_data="dur_1h"),
+        InlineKeyboardButton("5h", callback_data="dur_5h"),
+        InlineKeyboardButton("10h", callback_data="dur_10h"),
+        InlineKeyboardButton("24h", callback_data="dur_24h"),
+        InlineKeyboardButton("Always", callback_data="dur_always")
+    )
+    markup.add(InlineKeyboardButton("🔙 Back", callback_data="menu_admin"))
+    return markup
 
-      console.log(`Sending Email using Template [${templateId}]...`);
+def monitoring_keyboard():
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("🌲 Forest Department Dashboard", url="https://gir-forest-guardian.vercel.app/"))
+    markup.add(InlineKeyboardButton("🛣️ Highway Safety Dashboard", url="https://highway-animle-sfaty.vercel.app/"))
+    markup.add(InlineKeyboardButton("🔙 Back", callback_data="menu_admin"))
+    return markup
 
-      emailjs.send(EMAILJS_SERVICE_ID, templateId, templateParams)
-        .then((res) => {
-          console.log(`Email Sent Successfully (${templateId})! Status: ${res.status}`);
-        })
-        .catch((err) => {
-          console.error(`Email Sending Failed (${templateId}):`, err);
-        });
-    }
 
-    // ==========================================
-    // ૧. ફોરેસ્ટ સિસ્ટમ
-    // ==========================================
-    window.startForestSystem = async function() {
-      document.getElementById('startForestBtn').style.display = 'none';
-      const forestBox = document.getElementById('forestStatus');
-      const forestVideo = document.getElementById('forestWebcam');
-      forestBox.innerText = "કેમેરા કનેક્ટ થઈ રહ્યો છે...";
+# --- TELEGRAM BOT HANDLERS ---
 
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: "environment" }, 
-          audio: true 
-        });
-        forestVideo.srcObject = stream;
-        forestBox.innerText = "ફોરેસ્ટ મોનિટરિંગ સક્રિય...";
-      } catch (err) {
-        forestBox.className = "status-box alert";
-        forestBox.innerText = "કેમેરા ભૂલ: " + err.message;
-        return;
-      }
+@bot.message_handler(commands=['start', 'menu'])
+def send_welcome(message):
+    chat_id = message.chat.id
+    try:
+        bot.send_message(
+            chat_id, 
+            "🏠 *RoadGuardian Safety Control System*\n\nPlease choose an option:", 
+            parse_mode="Markdown", 
+            reply_markup=main_menu_keyboard(chat_id)
+        )
+    except Exception as e:
+        print(f"Error in send_welcome: {e}")
 
-      try {
-        const recognizer = speechCommands.create(
-          "BROWSER_FFT",
-          undefined,
-          FOREST_MODEL_URL + "model.json",
-          FOREST_MODEL_URL + "metadata.json"
-        );
+@bot.callback_query_handler(func=lambda call: True)
+def callback_listener(call):
+    chat_id = call.message.chat.id
+    message_id = call.message.message_id
 
-        await recognizer.ensureModelLoaded();
-        const classLabels = recognizer.wordLabels();
-        const labelContainer = document.getElementById("label-container-forest");
-        
-        labelContainer.innerHTML = "";
-        for (let i = 0; i < classLabels.length; i++) {
-          labelContainer.appendChild(document.createElement("div"));
-        }
+    try:
+        if call.data == "menu_main":
+            bot.edit_message_text("🏠 *Main Menu*", chat_id, message_id, parse_mode="Markdown", reply_markup=main_menu_keyboard(chat_id))
 
-        recognizer.listen(result => {
-          const scores = result.scores;
-          for (let i = 0; i < classLabels.length; i++) {
-            labelContainer.childNodes[i].innerHTML = classLabels[i] + ": " + scores[i].toFixed(2);
+        elif call.data == "menu_admin":
+            if not is_admin(chat_id):
+                bot.answer_callback_query(call.id, "🔒 Enter Admin Password in chat!")
+                set_user_state(chat_id, "awaiting_admin_password")
+                bot.send_message(chat_id, "🔐 Please enter the **Admin Password**:")
+            else:
+                bot.edit_message_text("🛠️ *Admin Panel*", chat_id, message_id, parse_mode="Markdown", reply_markup=admin_menu_keyboard())
 
-            const labelName = classLabels[i].toLowerCase();
-            if (scores[i] >= 0.88 && (labelName.includes("gunshoot") || labelName.includes("gunshot")) && !isForestAlerting) {
-              isForestAlerting = true;
+        elif call.data == "admin_make_code":
+            bot.edit_message_text("🔑 *Make Visitor Pass Code*\nSelect Pass Duration:", chat_id, message_id, parse_mode="Markdown", reply_markup=duration_keyboard())
 
-              set(ref(db, 'status'), 1);
+        elif call.data.startswith("dur_"):
+            duration = call.data.split("_")[1]
+            set_user_state(chat_id, {"action": "awaiting_phone", "duration": duration})
+            bot.send_message(chat_id, f"📱 Selected Duration: *{duration}*\nNow type the Visitor's Phone Number:")
 
-              forestBox.className = "status-box alert";
-              forestBox.innerText = "🚨 ALERT: બંદૂકનો અવાજ શોધી કાઢ્યો!";
+        elif call.data == "admin_monitoring":
+            bot.edit_message_text("📡 *Monitoring System*", chat_id, message_id, parse_mode="Markdown", reply_markup=monitoring_keyboard())
 
-              sendEmailAlert("Forest Officer", "Gunshot Detected", forestVideo, EMAILJS_TEMPLATE_ID_FOREST);
-              sendTelegramPhotoAlert("GUNSHOT", forestVideo);
+        elif call.data == "menu_visitor":
+            set_user_state(chat_id, "awaiting_visitor_code")
+            bot.send_message(chat_id, "🎟️ *Visitor Access*\nPlease enter your Pass Code:")
 
-              setTimeout(() => {
-                set(ref(db, 'status'), 0);
-                forestBox.className = "status-box safe";
-                forestBox.innerText = "ફોરેસ્ટ મોનિટરિંગ સક્રિય...";
-                isForestAlerting = false;
-              }, 4000);
-            }
-          }
-        }, {
-          includeSpectrogram: false,
-          probabilityThreshold: 0.85,
-          invokeCallbackOnNoiseAndUnknown: true,
-          overlapFactor: 0.50
-        });
+    except Exception as e:
+        print(f"Error in callback: {e}")
 
-      } catch (e) {
-        alert("Forest Error: " + e.message);
-      }
-    };
 
-    // ==========================================
-    // ૨. હાઇવે સિસ્ટમ
-    // ==========================================
-    window.startHighwaySystem = async function() {
-      document.getElementById('startHighwayBtn').style.display = 'none';
-      const highwayBox = document.getElementById('highwayStatus');
-      const highwayVideo = document.getElementById('highwayWebcam');
-      const labelContainer = document.getElementById('label-container-highway');
+@bot.message_handler(func=lambda message: True)
+def handle_text_inputs(message):
+    chat_id = message.chat.id
+    text = message.text.strip()
+    state = get_user_state(chat_id)
 
-      highwayBox.innerText = "કેમેરા ચાલુ થઈ રહ્યો છે...";
+    try:
+        # 🔑 Admin Password Verification
+        if text == ADMIN_PASSWORD:
+            add_admin(chat_id)
+            bot.reply_to(message, "🎉 *Admin Access Granted!*", parse_mode="Markdown", reply_markup=admin_menu_keyboard())
+            clear_user_state(chat_id)
+            return
 
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: "environment" }, 
-          audio: false 
-        });
-        highwayVideo.srcObject = stream;
-        await highwayVideo.play();
-        highwayBox.innerText = "કેમેરા સક્રિય. AI લોડ થાય છે...";
-      } catch (err) {
-        highwayBox.className = "status-box alert";
-        highwayBox.innerText = "કેમેરા ભૂલ: " + err.message;
-        return;
-      }
+        if state == "awaiting_admin_password":
+            bot.reply_to(message, "❌ Incorrect Password! Try again.")
+            clear_user_state(chat_id)
+            return
 
-      try {
-        cocoModel = await cocoSsd.load();
-        highwayBox.innerText = "હાઇવે મોનિટરિંગ સક્રિય...";
-        runHighwayDetection();
-      } catch (err) {
-        highwayBox.innerText = "AI ભૂલ: " + err.message;
-      }
+        # 🎫 Generate Visitor Pass Code
+        if isinstance(state, dict) and state.get("action") == "awaiting_phone":
+            duration = state.get("duration")
+            phone = text
+            code = "PASS-" + ''.join(random.choices(string.digits, k=6))
 
-      const animalClasses = ['cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'bird'];
+            save_visitor_code(code, phone, duration)
 
-      async function runHighwayDetection() {
-        if (!highwayVideo || highwayVideo.paused || highwayVideo.ended) return;
+            caption = (
+                f"✅ *Visitor Pass Code Created!*\n\n"
+                f"🎟️ Pass Code: `{code}`\n"
+                f"📱 Phone: {phone}\n"
+                f"⏱️ Duration: {duration}\n\n"
+                f"📲 *Give this code to the visitor to authorize their Telegram.*"
+            )
+            bot.send_message(chat_id, caption, parse_mode="Markdown")
+            clear_user_state(chat_id)
+            return
 
-        try {
-          const predictions = await cocoModel.detect(highwayVideo);
-          let detectedList = [];
-          let animalFound = false;
+        # 🎟️ Visitor Code Authorization
+        if state == "awaiting_visitor_code":
+            success, duration = verify_and_register_visitor(chat_id, text)
+            if success:
+                bot.reply_to(message, f"🎉 *Access Granted! You are now Authorized.*\n\nWelcome! You will now receive live safety alerts on this chat.\n⏱️ Duration: *{duration}*", parse_mode="Markdown")
+            else:
+                bot.reply_to(message, "❌ Invalid or Expired Pass Code! Access Denied.")
+            clear_user_state(chat_id)
+            return
+    except Exception as e:
+        print(f"Error handling message: {e}")
 
-          predictions.forEach(prediction => {
-            if (prediction.score > 0.5) {
-              const label = prediction.class.toLowerCase();
-              detectedList.push(`${prediction.class} (${Math.round(prediction.score * 100)}%)`);
 
-              if (animalClasses.includes(label)) {
-                animalFound = true;
-              }
-            }
-          });
+# --- API ENDPOINTS FOR HTML WEB ALERTS ---
 
-          labelContainer.innerHTML = detectedList.length > 0 ? detectedList.join("<br>") : "કોઈ પ્રાણી દેખાતું નથી...";
+# 🛣️ Highway Alert API Route (Matches your HTML fetch call)
+@app.route('/api/alert', methods=['POST'])
+@app.route('/alert', methods=['POST'])
+def receive_highway_alert():
+    if 'photo' not in request.files:
+        return jsonify({"error": "Missing photo file"}), 400
 
-          if (animalFound && !isHighwayAlerting) {
-            isHighwayAlerting = true;
+    recipients = get_active_recipients()
+    if not recipients:
+        return jsonify({"status": "Ignored", "message": "No granted users found to receive alert."}), 200
 
-            set(ref(db, 'status'), 1);
+    animal = request.form.get('animal', 'ANIMAL ON ROAD')
+    photo_file = request.files['photo']
+    photo_bytes = photo_file.read()
 
-            highwayBox.className = "status-box alert";
-            highwayBox.innerText = "🚨 WARNING: રસ્તા પર પ્રાણી ડિટેક્ટ થયું!";
+    caption = (
+        f"🚨 *ROADGUARDIAN HIGHWAY ALERT*\n\n"
+        f"🐾 *Detected Threat:* {animal}\n"
+        f"📍 *Location:* Rajkot-Gondal Highway\n"
+        f"⚠️ *Drive with caution!*"
+    )
 
-            // 📩 Highway Email Dispatch
-            sendEmailAlert("Highway Patrol Officer", "Animal Detected on Road", highwayVideo, EMAILJS_TEMPLATE_ID_HIGHWAY);
-            sendTelegramPhotoAlert("ANIMAL", highwayVideo);
+    success_count = 0
+    for cid in recipients:
+        try:
+            photo_stream = io.BytesIO(photo_bytes)
+            photo_stream.name = 'highway_alert.jpg'
+            bot.send_photo(chat_id=cid, photo=photo_stream, caption=caption, parse_mode="Markdown")
+            success_count += 1
+        except Exception as e:
+            print(f"Failed sending alert to {cid}: {e}")
 
-            setTimeout(() => {
-              set(ref(db, 'status'), 0);
-              highwayBox.className = "status-box safe";
-              highwayBox.innerText = "હાઇવે મોનિટરિંગ સક્રિય...";
-              isHighwayAlerting = false;
-            }, 5000);
-          }
-        } catch (e) {
-          console.error("Highway Detect Error:", e);
-        }
+    return jsonify({"status": "Highway Alert sent", "sent_to_count": success_count}), 200
 
-        requestAnimationFrame(runHighwayDetection);
-      }
-    };
-  </script>
-</body>
-</html>
+
+# 🌲 Forest Alert API Route (Matches your HTML fetch call)
+@app.route('/api/forest-alert', methods=['POST'])
+@app.route('/forest-alert', methods=['POST'])
+def receive_forest_alert():
+    if 'photo' not in request.files:
+        return jsonify({"error": "Missing photo file"}), 400
+
+    recipients = get_active_recipients()
+    if not recipients:
+        return jsonify({"status": "Ignored", "message": "No granted users found to receive alert."}), 200
+
+    sound_label = request.form.get('label', 'GUNSHOT DETECTED')
+    photo_file = request.files['photo']
+    photo_bytes = photo_file.read()
+
+    caption = (
+        f"🚨 *GIR FOREST DEPARTMENT CRITICAL ALERT*\n\n"
+        f"💥 *Threat Detected:* {sound_label}\n"
+        f"📍 *Location:* Gir Forest Zone-1\n"
+        f"⚠️ *Immediate Action Required! Forest Range Officer Alerted.*"
+    )
+
+    success_count = 0
+    for cid in recipients:
+        try:
+            photo_stream = io.BytesIO(photo_bytes)
+            photo_stream.name = 'forest_alert.jpg'
+            bot.send_photo(chat_id=cid, photo=photo_stream, caption=caption, parse_mode="Markdown")
+            success_count += 1
+        except Exception as e:
+            print(f"Failed sending alert to {cid}: {e}")
+
+    return jsonify({"status": "Forest Alert sent", "sent_to_count": success_count}), 200
+
+
+# 📡 Telegram Webhook Route
+@app.route('/api/webhook', methods=['POST', 'GET'])
+@app.route('/webhook', methods=['POST', 'GET'])
+def telegram_webhook():
+    if request.method == 'GET':
+        return "Webhook Endpoint Ready!", 200
+
+    if request.headers.get('content-type') == 'application/json':
+        try:
+            json_string = request.get_data().decode('utf-8')
+            update = telebot.types.Update.de_json(json_string)
+            bot.process_new_updates([update])
+            return 'OK', 200
+        except Exception as e:
+            print(f"Webhook processing error: {e}")
+            return 'Error', 500
+    return 'Bad Request', 400
+
+
+@app.route('/', methods=['GET'])
+def index_check():
+    return "🚀 Road Guardian Vercel Backend Running!", 200
+
+# Vercel Serverless Hook
+app_instance = app
