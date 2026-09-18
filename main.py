@@ -1,4 +1,4 @@
-import os
+Import os
 import random
 import string
 import time
@@ -33,11 +33,11 @@ CORS(app)
 # --- DIRECT CAMERA QR SCANNER WEBAPP HTML ---
 SCANNER_HTML = """
 <!DOCTYPE html>
-<html lang="gu">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>રોડગાર્ડિયન QR સ્કેનર</title>
+  <title>RoadGuardian QR Scanner</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
@@ -80,10 +80,10 @@ SCANNER_HTML = """
 </head>
 <body>
   <div class="scanner-card">
-    <h3 style="margin:0;">📷 મુલાકાતી પાસ સ્કેન કરો</h3>
-    <p style="color: #94a3b8; font-size: 12px; margin-top: 5px;">સુરક્ષા એક્સેસ મેળવવા QR સ્કેન કરો</p>
+    <h3 style="margin:0;">📷 Scanning Visitor Pass</h3>
+    <p style="color: #94a3b8; font-size: 12px; margin-top: 5px;">Scan QR to grant safety access</p>
     <div id="reader"></div>
-    <div class="status" id="status-text">કેમેરા શરૂ થઈ રહ્યો છે...</div>
+    <div class="status" id="status-text">Initializing Camera...</div>
   </div>
 
   <script>
@@ -97,12 +97,13 @@ SCANNER_HTML = """
       if (isProcessing) return;
       isProcessing = true;
 
-      document.getElementById('status-text').innerHTML = `<span style="color:#4ade80;">✅ પાસ સ્કેન થયો! ચકાસણી થઈ રહી છે...</span>`;
+      document.getElementById('status-text').innerHTML = `<span style="color:#4ade80;">✅ Pass Scanned! Verifying...</span>`;
 
       try {
+        // Required for ReplyKeyboardButton WebApps to pass data back to bot
         tg.sendData(decodedText);
       } catch (e) {
-        document.getElementById('status-text').innerHTML = `<span style="color:#ef4444;">❌ ટેલિગ્રામ બ્રિજ ભૂલ</span>`;
+        document.getElementById('status-text').innerHTML = `<span style="color:#ef4444;">❌ Telegram Bridge Error</span>`;
       }
     }
 
@@ -230,41 +231,42 @@ def get_active_recipients():
 
 def main_menu_keyboard():
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("🛠️ એડમિન પેનલ", callback_data="menu_admin"))
-    markup.add(InlineKeyboardButton("👤 મુલાકાતી એક્સેસ વિકલ્પો", callback_data="menu_visitor"))
+    markup.add(InlineKeyboardButton("🛠️ Admin Panel", callback_data="menu_admin"))
+    markup.add(InlineKeyboardButton("👤 Visitor Access Options", callback_data="menu_visitor"))
     return markup
 
 def visitor_keyboard():
+    # ReplyKeyboardMarkup is mandatory for WebApp sendData() support
     markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     scanner_url = f"{SERVER_URL}/scanner"
-    markup.add(KeyboardButton("📷 QR કેમેરા સ્કેનર ખોલો", web_app=WebAppInfo(url=scanner_url)))
+    markup.add(KeyboardButton("📷 Open QR Camera Scanner", web_app=WebAppInfo(url=scanner_url)))
     return markup
 
 def admin_menu_keyboard():
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("🔑 મુલાકાતી માટે કોડ બનાવો", callback_data="admin_make_code"))
-    markup.add(InlineKeyboardButton("📡 મોનિટરિંગ કંટ્રોલ", callback_data="admin_monitoring"))
-    markup.add(InlineKeyboardButton("🔙 મુખ્ય મેનુ પર પાછા જાઓ", callback_data="menu_main"))
+    markup.add(InlineKeyboardButton("🔑 Make Code of Visitor", callback_data="admin_make_code"))
+    markup.add(InlineKeyboardButton("📡 Monitoring Control", callback_data="admin_monitoring"))
+    markup.add(InlineKeyboardButton("🔙 Back to Main", callback_data="menu_main"))
     return markup
 
 def duration_keyboard():
     markup = InlineKeyboardMarkup(row_width=3)
     markup.add(
-        InlineKeyboardButton("10 મિનિટ", callback_data="dur_10m"),
-        InlineKeyboardButton("1 કલાક", callback_data="dur_1h"),
-        InlineKeyboardButton("5 કલાક", callback_data="dur_5h"),
-        InlineKeyboardButton("10 કલાક", callback_data="dur_10h"),
-        InlineKeyboardButton("24 કલાક", callback_data="dur_24h"),
-        InlineKeyboardButton("હંમેશા માટે", callback_data="dur_always")
+        InlineKeyboardButton("10m", callback_data="dur_10m"),
+        InlineKeyboardButton("1h", callback_data="dur_1h"),
+        InlineKeyboardButton("5h", callback_data="dur_5h"),
+        InlineKeyboardButton("10h", callback_data="dur_10h"),
+        InlineKeyboardButton("24h", callback_data="dur_24h"),
+        InlineKeyboardButton("Always", callback_data="dur_always")
     )
-    markup.add(InlineKeyboardButton("🔙 પાછા જાઓ", callback_data="menu_admin"))
+    markup.add(InlineKeyboardButton("🔙 Back", callback_data="menu_admin"))
     return markup
 
 def monitoring_keyboard():
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("🌲 ગીર જંગલ વિભાગ ડેશબોર્ડ", url="https://gir-forest-guardian.vercel.app/"))
-    markup.add(InlineKeyboardButton("🛣️ હાઇવે સુરક્ષા ડેશબોર્ડ", url="https://highway-animle-sfaty.vercel.app/"))
-    markup.add(InlineKeyboardButton("🔙 પાછા જાઓ", callback_data="menu_admin"))
+    markup.add(InlineKeyboardButton("🌲 Forest Department Dashboard", url="https://gir-forest-guardian.vercel.app/"))
+    markup.add(InlineKeyboardButton("🛣️ Highway Safety Dashboard", url="https://highway-animle-sfaty.vercel.app/"))
+    markup.add(InlineKeyboardButton("🔙 Back", callback_data="menu_admin"))
     return markup
 
 
@@ -276,7 +278,7 @@ def send_welcome(message):
     try:
         bot.send_message(
             chat_id, 
-            "🏠 *રોડગાર્ડિયન સુરક્ષા કંટ્રોલ સિસ્ટમ*\n\nકૃપા કરીને એક વિકલ્પ પસંદ કરો:", 
+            "🏠 *RoadGuardian Safety Control System*\n\nPlease choose an option:", 
             parse_mode="Markdown", 
             reply_markup=main_menu_keyboard()
         )
@@ -290,34 +292,34 @@ def callback_listener(call):
 
     try:
         if call.data == "menu_main":
-            bot.edit_message_text("🏠 *મુખ્ય મેનુ*", chat_id, message_id, parse_mode="Markdown", reply_markup=main_menu_keyboard())
+            bot.edit_message_text("🏠 *Main Menu*", chat_id, message_id, parse_mode="Markdown", reply_markup=main_menu_keyboard())
 
         elif call.data == "menu_visitor":
             bot.send_message(
                 chat_id, 
-                "📲 કેમેરા ખોલવા માટે નીચે આપેલા **QR કેમેરા સ્કેનર ખોલો** બટન પર ટેપ કરો, અથવા ફક્ત તમારો પાસ કોડ લખીને મોકલો:", 
+                "📲 Tap the **Open QR Camera Scanner** button below your chat input to open the camera, or simply type your pass code manually:", 
                 parse_mode="Markdown", 
                 reply_markup=visitor_keyboard()
             )
 
         elif call.data == "menu_admin":
             if not is_admin(chat_id):
-                bot.answer_callback_query(call.id, "🔒 પહેલા ચેટમાં એડમિન પાસવર્ડ દાખલ કરો!")
+                bot.answer_callback_query(call.id, "🔒 Enter admin password in chat first!")
                 set_user_state(chat_id, "awaiting_admin_password")
-                bot.send_message(chat_id, "🔐 કૃપા કરીને **એડમિન પાસવર્ડ** ટાઇપ કરો:")
+                bot.send_message(chat_id, "🔐 Please enter the **Admin Password**:")
             else:
-                bot.edit_message_text("🛠️ *એડમિન પેનલ*", chat_id, message_id, parse_mode="Markdown", reply_markup=admin_menu_keyboard())
+                bot.edit_message_text("🛠️ *Admin Panel*", chat_id, message_id, parse_mode="Markdown", reply_markup=admin_menu_keyboard())
 
         elif call.data == "admin_make_code":
-            bot.edit_message_text("🔑 *મુલાકાતી પાસ કોડ બનાવો*\nપાસની સમયમર્યાદા પસંદ કરો:", chat_id, message_id, parse_mode="Markdown", reply_markup=duration_keyboard())
+            bot.edit_message_text("🔑 *Make Visitor Pass Code*\nSelect Pass Duration:", chat_id, message_id, parse_mode="Markdown", reply_markup=duration_keyboard())
 
         elif call.data.startswith("dur_"):
             duration = call.data.split("_")[1]
             set_user_state(chat_id, {"action": "awaiting_phone", "duration": duration})
-            bot.send_message(chat_id, f"📱 પસંદ કરેલ મર્યાદા: *{duration}*\nહવે મુલાકાતીનો મોબાઈલ નંબર લખો:")
+            bot.send_message(chat_id, f"📱 Selected Duration: *{duration}*\nNow type the Visitor's Phone Number:")
 
         elif call.data == "admin_monitoring":
-            bot.edit_message_text("📡 *મોનિટરિંગ સિસ્ટમ*", chat_id, message_id, parse_mode="Markdown", reply_markup=monitoring_keyboard())
+            bot.edit_message_text("📡 *Monitoring System*", chat_id, message_id, parse_mode="Markdown", reply_markup=monitoring_keyboard())
 
     except Exception as e:
         print(f"Error in callback: {e}")
@@ -332,16 +334,16 @@ def handle_web_app_data(message):
     if success:
         bot.reply_to(
             message, 
-            f"🎉 *પ્રવેશ સ્વીકૃત! તમે અધિકૃત છો.*\n\n"
-            f"તમારી ચેટ ID `{chat_id}` ફાઉન્ડેશનમાં સેવ થઈ ગઈ છે!\n"
-            f"⏱️ સક્રિય સમયમર્યાદા: *{duration}*", 
+            f"🎉 *Access Granted! You are Authorized.*\n\n"
+            f"Your Chat ID `{chat_id}` is saved in Firebase!\n"
+            f"⏱️ Active Duration: *{duration}*", 
             parse_mode="Markdown",
             reply_markup=ReplyKeyboardRemove()
         )
     else:
         bot.reply_to(
             message, 
-            "❌ અમાન્ય અથવા મુદત પૂરી થયેલ પાસ કોડ! પ્રવેશ અસ્વીકૃત.",
+            "❌ Invalid or Expired Pass Code! Access Denied.",
             reply_markup=ReplyKeyboardRemove()
         )
     clear_user_state(chat_id)
@@ -355,12 +357,12 @@ def handle_text_inputs(message):
     try:
         if text == ADMIN_PASSWORD:
             add_admin(chat_id)
-            bot.reply_to(message, "🎉 *એડમિન એક્સેસ મંજૂર કરવામાં આવ્યો!*", parse_mode="Markdown", reply_markup=admin_menu_keyboard())
+            bot.reply_to(message, "🎉 *Admin Access Granted!*", parse_mode="Markdown", reply_markup=admin_menu_keyboard())
             clear_user_state(chat_id)
             return
 
         if state == "awaiting_admin_password":
-            bot.reply_to(message, "❌ ખોટો પાસવર્ડ!")
+            bot.reply_to(message, "❌ Incorrect Password!")
             clear_user_state(chat_id)
             return
 
@@ -373,11 +375,11 @@ def handle_text_inputs(message):
             qr_url = get_qr_api_url(code)
 
             caption = (
-                f"✅ *મુલાકાતી પાસ તૈયાર છે!*\n\n"
-                f"🎟️ પાસ કોડ: `{code}`\n"
-                f"📱 ફોન નંબર: {phone}\n"
-                f"⏱️ સમયમર્યાદા: {duration}\n\n"
-                f"📲 *ઓટોમેટિક રજીસ્ટ્રેશન માટે આ QR કોડ 'મુલાકાતી એક્સેસ' દ્વારા સ્કેન કરો.*"
+                f"✅ *Visitor Pass Created!*\n\n"
+                f"🎟️ Pass Code: `{code}`\n"
+                f"📱 Phone: {phone}\n"
+                f"⏱️ Duration: {duration}\n\n"
+                f"📲 *Scan this QR Code via 'Visitor Access' to register automatically.*"
             )
             bot.send_photo(chat_id, photo=qr_url, caption=caption, parse_mode="Markdown")
             clear_user_state(chat_id)
@@ -388,16 +390,16 @@ def handle_text_inputs(message):
             if success:
                 bot.reply_to(
                     message, 
-                    f"🎉 *પ્રવેશ સ્વીકૃત! તમે અધિકૃત છો.*\n\n"
-                    f"તમારી ચેટ ID `{chat_id}` ફાઉન્ડેશનમાં સેવ થઈ ગઈ છે!\n"
-                    f"⏱️ સક્રિય સમયમર્યાદા: *{duration}*", 
+                    f"🎉 *Access Granted! You are Authorized.*\n\n"
+                    f"Your Chat ID `{chat_id}` is saved in Firebase!\n"
+                    f"⏱️ Active Duration: *{duration}*", 
                     parse_mode="Markdown",
                     reply_markup=ReplyKeyboardRemove()
                 )
             else:
                 bot.reply_to(
                     message, 
-                    "❌ અમાન્ય અથવા મુદત પૂરી થયેલ પાસ કોડ! પ્રવેશ અસ્વીકૃત.",
+                    "❌ Invalid or Expired Pass Code! Access Denied.",
                     reply_markup=ReplyKeyboardRemove()
                 )
             clear_user_state(chat_id)
@@ -427,7 +429,7 @@ def receive_alert_from_web():
     photo_file = request.files['photo']
     photo_bytes = photo_file.read()
 
-    caption = f"🚨 *રોડગાર્ડિયન હાઇવે એલર્ટ*\n\n🐾 *પ્રાણી જોવા મળ્યું:* {animal}\n📍 *સ્થળ:* રાજકોટ-ગોંડલ હાઇવે\n⚠️ *સાવચેતીપૂર્વક વાહન ચલાવો!*"
+    caption = f"🚨 *ROADGUARDIAN HIGHWAY ALERT*\n\n🐾 *Animal Detected:* {animal}\n📍 *Location:* Rajkot-Gondal Highway\n⚠️ *Drive with caution!*"
 
     success_count = 0
     for cid in recipients:
@@ -452,15 +454,15 @@ def receive_forest_alert():
     if not recipients:
         return jsonify({"status": "Ignored", "message": "No granted users found in Firebase."}), 200
 
-    sound_label = request.form.get('label', 'બંદૂકની ગોળીનો અવાજ શોધો')
+    sound_label = request.form.get('label', 'GUNSHOT DETECTED')
     photo_file = request.files['photo']
     photo_bytes = photo_file.read()
 
     caption = (
-        f"🚨 *ગીર જંગલ વિભાગ કટોકટીની ચેતવણી*\n\n"
-        f"💥 *ખતરો શોધાયો:* {sound_label}\n"
-        f"📍 *સ્થળ:* ગીર જંગલ ઝોન-૧\n"
-        f"⚠️ *તાત્કાલિક પગલાં જરૂરી! વન અધિકારીને જાણ કરવામાં આવી છે.*"
+        f"🚨 *GIR FOREST DEPARTMENT CRITICAL ALERT*\n\n"
+        f"💥 *Threat Detected:* {sound_label}\n"
+        f"📍 *Location:* Gir Forest Zone-1\n"
+        f"⚠️ *Immediate Action Required! Forest Range Officer Alerted.*"
     )
 
     success_count = 0
