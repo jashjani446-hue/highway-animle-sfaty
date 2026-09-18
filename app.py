@@ -7,7 +7,7 @@ import requests
 import qrcode
 from PIL import Image
 from pyzbar.pyzbar import decode
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify 
 from flask_cors import CORS
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
