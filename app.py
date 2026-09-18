@@ -9,6 +9,14 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from PIL import Image
+
+# Dynamic Import for In-Built Scanning Engine
+try:
+    from pyzbar.pyzbar import decode as pyzbar_decode
+    PYZBAR_AVAILABLE = True
+except Exception:
+    PYZBAR_AVAILABLE = False
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8560832618:AAFxHDrVvAEHDR1zKUtK1glQq0RWMsYrWXk")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "jashjani")
@@ -21,7 +29,7 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = Flask(__name__)
 CORS(app)
 
-# --- FIREBASE HELPERS ---
+# --- FIREBASE HELPER FUNCTIONS ---
 
 def set_firebase_data(path, data):
     try:
@@ -103,17 +111,47 @@ def get_active_recipients():
                     recipients.add(str(cid))
     return list(recipients)
 
-# --- BOT KEYBOARDS ---
+# --- IN-BUILT QR SCANNER ENGINE ---
+
+def scan_qr_from_bytes(image_bytes):
+    """Scans QR code directly in memory using PyZbar or fallback parser"""
+    extracted_text = None
+    
+    # 1. Primary In-Built Pure Scanning Engine
+    if PYZBAR_AVAILABLE:
+        try:
+            img = Image.open(io.BytesIO(image_bytes))
+            decoded_objs = pyzbar_decode(img)
+            if decoded_objs:
+                extracted_text = decoded_objs[0].data.decode('utf-8')
+                return extracted_text
+        except Exception as e:
+            print(f"Pyzbar engine error: {e}")
+
+    # 2. Direct API Fallback Engine (If C-Libraries are missing on serverless host)
+    try:
+        files = {'file': ('qr.jpg', image_bytes, 'image/jpeg')}
+        res = requests.post("https://api.qrserver.com/v1/read-qr-code/", files=files, timeout=8).json()
+        if res and len(res) > 0:
+            symbol = res[0].get('symbol', [])
+            if symbol and len(symbol) > 0:
+                extracted_text = symbol[0].get('data')
+    except Exception as e:
+        print(f"Fallback scan engine error: {e}")
+
+    return extracted_text
+
+# --- TELEGRAM BOT KEYBOARDS ---
 
 def main_menu_keyboard():
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("🛠️ Admin Panel", callback_data="menu_admin"))
-    markup.add(InlineKeyboardButton("👤 Visitor Access", callback_data="menu_visitor"))
+    markup.add(InlineKeyboardButton("📸 Direct QR Scanning / Access", callback_data="menu_visitor"))
     return markup
 
 def admin_menu_keyboard():
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("🔑 Generate Dynamic QR Pass", callback_data="admin_make_code"))
+    markup.add(InlineKeyboardButton("🔑 Generate Pass (QR Code)", callback_data="admin_make_code"))
     markup.add(InlineKeyboardButton("🔙 Main Menu", callback_data="menu_main"))
     return markup
 
@@ -129,11 +167,11 @@ def duration_keyboard():
     )
     return markup
 
-# --- BOT HANDLERS ---
+# --- TELEGRAM BOT HANDLERS ---
 
 @bot.message_handler(commands=['start', 'menu'])
 def send_welcome(message):
-    bot.send_message(message.chat.id, "🏠 *RoadGuardian Control Panel*", parse_mode="Markdown", reply_markup=main_menu_keyboard())
+    bot.send_message(message.chat.id, "🏠 *RoadGuardian Control System*", parse_mode="Markdown", reply_markup=main_menu_keyboard())
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_listener(call):
@@ -153,40 +191,42 @@ def callback_listener(call):
     elif call.data.startswith("dur_"):
         duration = call.data.split("_")[1]
         set_user_state(chat_id, {"action": "awaiting_phone", "duration": duration})
-        bot.send_message(chat_id, f"📱 Selected: *{duration}*\nNow type Visitor's Phone Number:")
+        bot.send_message(chat_id, f"📱 Selected Duration: *{duration}*\nNow enter Visitor's Phone Number:")
     elif call.data == "menu_visitor":
         set_user_state(chat_id, "awaiting_visitor_code")
-        bot.send_message(chat_id, "🎟️ Send Pass Code OR Photo of the QR Code:")
+        bot.send_message(chat_id, "📷 *Direct QR Scanner Active!*\n\nSend or scan the QR Code photo directly into this chat now:")
+
+# --- IN-BUILT DIRECT SCANNING HANDLER ---
 
 @bot.message_handler(content_types=['photo'])
-def handle_photo_qr(message):
+def handle_direct_photo_scan(message):
     chat_id = message.chat.id
-    if get_user_state(chat_id) == "awaiting_visitor_code":
-        try:
-            file_info = bot.get_file(message.photo[-1].file_id)
-            img_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_info.file_path}"
-            
-            # Read QR Code via API
-            qr_res = requests.get(f"https://api.qrserver.com/v1/read-qr-code/?fileurl={urllib.parse.quote(img_url)}", timeout=10).json()
-            
-            extracted_code = None
-            if qr_res and len(qr_res) > 0:
-                symbol = qr_res[0].get('symbol', [])
-                if symbol and len(symbol) > 0:
-                    extracted_code = symbol[0].get('data')
+    state = get_user_state(chat_id)
 
-            if extracted_code:
-                code_clean = extracted_code.strip()
+    if state == "awaiting_visitor_code":
+        bot.send_chat_action(chat_id, 'typing')
+        try:
+            # Fetch highest quality image from Telegram
+            file_info = bot.get_file(message.photo[-1].file_id)
+            file_bytes = bot.download_file(file_info.file_path)
+
+            # Direct In-Built QR Scan
+            scanned_code = scan_qr_from_bytes(file_bytes)
+
+            if scanned_code:
+                code_clean = scanned_code.strip()
                 success, duration = verify_and_register_visitor(chat_id, code_clean)
                 if success:
-                    bot.reply_to(message, f"🎉 *QR Verified! Access Granted.*\n⏱️ Duration: *{duration}*", parse_mode="Markdown")
+                    bot.reply_to(message, f"🎉 *QR Code Successfully Scanned & Verified!*\n\n🎟️ Code: `{code_clean}`\n⏱️ Duration Active: *{duration}*", parse_mode="Markdown")
                 else:
-                    bot.reply_to(message, f"❌ Invalid or Expired Pass Code in QR: `{code_clean}`", parse_mode="Markdown")
+                    bot.reply_to(message, f"❌ QR Code contains Invalid/Expired Pass Code: `{code_clean}`", parse_mode="Markdown")
             else:
-                bot.reply_to(message, "❌ Could not detect QR code in image. Make sure image is clear.")
+                bot.reply_to(message, "🔍 Could not read QR Code in the image. Please make sure image is sharp and clear.")
+
             clear_user_state(chat_id)
         except Exception as e:
-            bot.reply_to(message, "❌ Error reading QR Code.")
+            print(f"Direct scan exception: {e}")
+            bot.reply_to(message, "❌ Error scanning image. Please type the Pass Code manually.")
 
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
@@ -205,15 +245,15 @@ def handle_text(message):
         code = "PASS-" + ''.join(random.choices(string.digits, k=6))
         save_visitor_code(code, text, duration)
 
-        # Generating Dynamic Clear Text QR Image
-        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=400x400&data={urllib.parse.quote(code)}"
+        # Generating High Resolution Dynamic QR Code
+        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=500x500&data={urllib.parse.quote(code)}"
 
         caption = (
-            f"✅ *DYNAMIC VISITOR QR PASS*\n\n"
+            f"✅ *DYNAMIC VISITOR PASS CREATED*\n\n"
             f"🎟️ Code: `{code}`\n"
             f"📱 Phone: {text}\n"
             f"⏱️ Duration: {duration}\n\n"
-            f"🔍 *This QR code contains explicit data (`{code}`) verifiable by Google Lens or any Scanner.*"
+            f"📷 *Visitors can directly send a photo of this QR to scan & get access!*"
         )
         bot.send_photo(chat_id, photo=qr_url, caption=caption, parse_mode="Markdown")
         clear_user_state(chat_id)
@@ -227,7 +267,7 @@ def handle_text(message):
             bot.reply_to(message, "❌ Invalid Pass Code!")
         clear_user_state(chat_id)
 
-# --- ALERTS API ---
+# --- API ENDPOINTS FOR ALERTS ---
 
 @app.route('/api/alert', methods=['POST'])
 @app.route('/alert', methods=['POST'])
@@ -265,4 +305,6 @@ def webhook():
     return 'OK', 200
 
 @app.route('/', methods=['GET'])
-def index(): return "RoadGuardian QR Backend Active!", 200
+def index(): return "RoadGuardian In-Built QR Backend Active!", 200
+
+app_instance = app
