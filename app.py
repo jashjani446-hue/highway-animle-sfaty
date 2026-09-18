@@ -131,12 +131,12 @@ def get_active_recipients():
 def main_menu_keyboard(chat_id):
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("🛠️ Admin Panel", callback_data="menu_admin"))
-    markup.add(InlineKeyboardButton("👤 Visitor Access", callback_data="menu_visitor"))
+    markup.add(InlineKeyboardButton("👤 Visitor Access (Code/QR)", callback_data="menu_visitor"))
     return markup
 
 def admin_menu_keyboard():
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("🔑 Make Pass Code", callback_data="admin_make_code"))
+    markup.add(InlineKeyboardButton("🔑 Make QR Pass Code", callback_data="admin_make_code"))
     markup.add(InlineKeyboardButton("📡 Monitoring Control", callback_data="admin_monitoring"))
     markup.add(InlineKeyboardButton("🔙 Back to Main", callback_data="menu_main"))
     return markup
@@ -207,12 +207,51 @@ def callback_listener(call):
 
         elif call.data == "menu_visitor":
             set_user_state(chat_id, "awaiting_visitor_code")
-            bot.send_message(chat_id, "🎟️ *Visitor Access*\nPlease enter your Pass Code:")
+            bot.send_message(chat_id, "🎟️ *Visitor Access*\nPlease enter your Pass Code or send the **QR Code Image**:")
 
     except Exception as e:
         print(f"Error in callback: {e}")
 
 
+# 📲 Handle QR Code Photo sent by Visitor
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    chat_id = message.chat.id
+    state = get_user_state(chat_id)
+
+    if state == "awaiting_visitor_code":
+        try:
+            # Fetch highest resolution photo from Telegram
+            file_info = bot.get_file(message.photo[-1].file_id)
+            file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_info.file_path}"
+
+            # Use QR Code Decoder API to read QR content
+            qr_api_url = f"https://api.qrserver.com/v1/read-qr-code/?fileurl={file_url}"
+            res = requests.get(qr_api_url, timeout=10).json()
+
+            extracted_code = None
+            if res and isinstance(res, list) and len(res) > 0:
+                symbol = res[0].get('symbol', [])
+                if symbol and len(symbol) > 0:
+                    extracted_code = symbol[0].get('data')
+
+            if extracted_code:
+                code_clean = extracted_code.strip()
+                success, duration = verify_and_register_visitor(chat_id, code_clean)
+                if success:
+                    bot.reply_to(message, f"🎉 *QR Code Verified! Access Granted.*\n\nWelcome! You will now receive live safety alerts on this chat.\n⏱️ Duration: *{duration}*", parse_mode="Markdown")
+                else:
+                    bot.reply_to(message, f"❌ QR Code contains invalid or expired pass: `{code_clean}`", parse_mode="Markdown")
+            else:
+                bot.reply_to(message, "❌ Could not read QR code from image. Please try again or type the text code manually.")
+
+            clear_user_state(chat_id)
+        except Exception as e:
+            print(f"Error processing QR Code image: {e}")
+            bot.reply_to(message, "❌ Error scanning QR code image. Please type your Pass Code manually.")
+
+
+# 📝 Handle Text Inputs
 @bot.message_handler(func=lambda message: True)
 def handle_text_inputs(message):
     chat_id = message.chat.id
@@ -232,7 +271,7 @@ def handle_text_inputs(message):
             clear_user_state(chat_id)
             return
 
-        # 🎫 Generate Visitor Pass Code
+        # 🎫 Generate Visitor Pass Code & QR Image
         if isinstance(state, dict) and state.get("action") == "awaiting_phone":
             duration = state.get("duration")
             phone = text
@@ -240,18 +279,21 @@ def handle_text_inputs(message):
 
             save_visitor_code(code, phone, duration)
 
+            # Dynamic QR Code Image Generation API URL
+            qr_image_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={code}"
+
             caption = (
                 f"✅ *Visitor Pass Code Created!*\n\n"
                 f"🎟️ Pass Code: `{code}`\n"
                 f"📱 Phone: {phone}\n"
                 f"⏱️ Duration: {duration}\n\n"
-                f"📲 *Give this code to the visitor to authorize their Telegram.*"
+                f"📲 *Forward this QR Code or Pass Code to the visitor!*"
             )
-            bot.send_message(chat_id, caption, parse_mode="Markdown")
+            bot.send_photo(chat_id, photo=qr_image_url, caption=caption, parse_mode="Markdown")
             clear_user_state(chat_id)
             return
 
-        # 🎟️ Visitor Code Authorization
+        # 🎟️ Manual Visitor Code Entry
         if state == "awaiting_visitor_code":
             success, duration = verify_and_register_visitor(chat_id, text)
             if success:
@@ -261,12 +303,11 @@ def handle_text_inputs(message):
             clear_user_state(chat_id)
             return
     except Exception as e:
-        print(f"Error handling message: {e}")
+        print(f"Error handling text input: {e}")
 
 
 # --- API ENDPOINTS FOR HTML WEB ALERTS ---
 
-# 🛣️ Highway Alert API Route (Matches your HTML fetch call)
 @app.route('/api/alert', methods=['POST'])
 @app.route('/alert', methods=['POST'])
 def receive_highway_alert():
@@ -301,7 +342,6 @@ def receive_highway_alert():
     return jsonify({"status": "Highway Alert sent", "sent_to_count": success_count}), 200
 
 
-# 🌲 Forest Alert API Route (Matches your HTML fetch call)
 @app.route('/api/forest-alert', methods=['POST'])
 @app.route('/forest-alert', methods=['POST'])
 def receive_forest_alert():
@@ -336,7 +376,6 @@ def receive_forest_alert():
     return jsonify({"status": "Forest Alert sent", "sent_to_count": success_count}), 200
 
 
-# 📡 Telegram Webhook Route
 @app.route('/api/webhook', methods=['POST', 'GET'])
 @app.route('/webhook', methods=['POST', 'GET'])
 def telegram_webhook():
@@ -359,5 +398,4 @@ def telegram_webhook():
 def index_check():
     return "🚀 Road Guardian Vercel Backend Running!", 200
 
-# Vercel Serverless Hook
 app_instance = app
