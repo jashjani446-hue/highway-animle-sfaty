@@ -16,7 +16,8 @@ FIREBASE_BASE_URL = os.getenv(
     "FIREBASE_BASE_URL", 
     "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian"
 )
-SERVER_URL = os.getenv("SERVER_URL", "https://your-domain.vercel.app")
+# તમારી Vercel લાઈવ URL આ જગ્યાએ સેટ કરો
+SERVER_URL = os.getenv("SERVER_URL", "https://your-actual-vercel-app.vercel.app")
 
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = Flask(__name__)
@@ -157,7 +158,6 @@ def admin_panel_keyboard():
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("➕ 1 Hour Pass", callback_data="gen_1h"))
     markup.add(InlineKeyboardButton("➕ 1 Day Pass", callback_data="gen_1d"))
-    markup.add(InlineKeyboardButton("➕ Custom Duration Pass", callback_data="gen_custom"))
     markup.add(InlineKeyboardButton("📋 Active Codes", callback_data="list_codes"))
     markup.add(InlineKeyboardButton("🏠 Main Menu", callback_data="menu_main"))
     return markup
@@ -216,6 +216,16 @@ def handle_callbacks(call):
             caption=f"🎟️ *નવો QR Pass તૈયાર છે!*\n\n👉 Code: `{code}`\n⏱️ Duration: *{dur_str}*", 
             parse_mode="Markdown"
         )
+    elif data == "list_codes":
+        if not is_admin(chat_id): return
+        codes = get_firebase_data("codes")
+        if isinstance(codes, dict) and codes:
+            msg_text = "📋 *સક્રિય QR કોડ્સ:*\n\n"
+            for c, val in codes.items():
+                msg_text += f"• `{c}` - {val.get('duration_str', 'N/A')}\n"
+            bot.send_message(chat_id, msg_text, parse_mode="Markdown")
+        else:
+            bot.send_message(chat_id, "ℹ️ કોઈ સક્રિય કોડ મળ્યો નથી.")
 
 @bot.message_handler(content_types=['web_app_data'])
 def handle_web_app_data(message):
@@ -226,7 +236,7 @@ def handle_web_app_data(message):
     if success:
         bot.reply_to(
             message, 
-            f"🎉 *QR Verified Automatically!*\n\n🎟️ Code: `{scanned_code}`\n⏱️ Duration: *{duration}*\n\nતમારું ડિવાઇસ કનેક્ટ થઈ ગયું છે. લાઈવ સેફ્ટી એલર્ટ મોકલવામાં આવશે.", 
+            f"🎉 *QR Verified Automatically!*\n\n🎟️ Code: `{scanned_code}`\n⏱️ Duration: *{duration}*\n\nતમારું ડિવાઇસ કનેક્ટ થઈ ગયું છે.", 
             parse_mode="Markdown"
         )
     else:
@@ -248,7 +258,10 @@ def webhook():
 
 @app.route('/', methods=['GET'])
 def index():
-    return "RoadGuardian Unified System Active!", 200
+    return "RoadGuardian Unified Engine Active!", 200
+
+# Vercel Serverless Export
+app_instance = app
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
