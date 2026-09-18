@@ -2,25 +2,23 @@ import os
 import random
 import string
 import time
-import io
 import requests
-import qrcode  # Added for QR Code generation
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# Environment variables
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8560832618:AAFxHDrVvAEHDR1zKUtK1glQq0RWMsYrWXk")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "jashjani")
-FIREBASE_BASE_URL = os.getenv(
-    "FIREBASE_BASE_URL", 
-    "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian"
-)
+BOT_TOKEN = "8560832618:AAFxHDrVvAEHDR1zKUtK1glQq0RWMsYrWXk"
+ADMIN_PASSWORD = "jash@2310"
+
+# Firebase Base URL
+FIREBASE_BASE_URL = "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian"
 
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = Flask(__name__)
 CORS(app)
+
+user_states = {}
 
 # --- FIREBASE HELPER FUNCTIONS ---
 
@@ -48,20 +46,7 @@ def is_admin(chat_id):
     return False
 
 def add_admin(chat_id):
-    set_firebase_data(f"admins/{str(chat_id)}", True)
-
-def set_user_state(chat_id, state):
-    set_firebase_data(f"user_states/{str(chat_id)}", state)
-
-def get_user_state(chat_id):
-    return get_firebase_data(f"user_states/{str(chat_id)}")
-
-def clear_user_state(chat_id):
-    try:
-        url = f"{FIREBASE_BASE_URL}/user_states/{str(chat_id)}.json"
-        requests.delete(url, timeout=5)
-    except Exception as e:
-        print(f"Firebase Delete Error: {e}")
+    set_firebase_data(f"admins/{chat_id}", True)
 
 def save_visitor_code(code, phone, duration_str):
     seconds_map = {
@@ -73,7 +58,7 @@ def save_visitor_code(code, phone, duration_str):
         "always": 100 * 365 * 86400
     }
     dur_sec = seconds_map.get(str(duration_str).lower(), 3600)
-
+    
     code_data = {
         "phone": phone,
         "duration_str": duration_str,
@@ -88,66 +73,50 @@ def verify_and_register_visitor(chat_id, code):
         c_data = codes[code]
         dur_sec = c_data.get("dur_sec", 3600)
         expire_timestamp = time.time() + dur_sec
-
+        
         subscriber_data = {
             "code": code,
             "phone": c_data.get("phone", ""),
             "duration": c_data.get("duration_str", ""),
             "expire_at": expire_timestamp
         }
-        set_firebase_data(f"subscribers/{str(chat_id)}", subscriber_data)
+        set_firebase_data(f"subscribers/{chat_id}", subscriber_data)
         return True, c_data.get("duration_str", "")
     return False, None
-
-# Helper to generate QR code in-memory
-def generate_qr_code_stream(data_text):
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=10,
-        border=4,
-    )
-    qr.add_data(data_text)
-    qr.make(fit=True)
-    
-    img = qr.make_image(fill_color="black", back_color="white")
-    img_bytes = io.BytesIO()
-    img.save(img_bytes, format='PNG')
-    img_bytes.seek(0)
-    return img_bytes
 
 def get_active_recipients():
     recipients = set()
     now = time.time()
 
-    root_data = get_firebase_data("")
-    if isinstance(root_data, dict):
-        admins = root_data.get("admins", {})
-        if isinstance(admins, dict):
-            for admin_id in admins.keys():
-                try:
-                    recipients.add(str(admin_id))
-                except Exception:
-                    pass
+    # 1. Add Admins
+    admins = get_firebase_data("admins")
+    if isinstance(admins, dict):
+        for admin_id in admins.keys():
+            try:
+                recipients.add(int(admin_id))
+            except Exception:
+                pass
 
-        subscribers = root_data.get("subscribers", {})
-        if isinstance(subscribers, dict):
-            for cid, sdata in subscribers.items():
-                if isinstance(sdata, dict):
-                    expire_at = sdata.get("expire_at", 0)
-                    if expire_at > now:
-                        try:
-                            recipients.add(str(cid))
-                        except Exception:
-                            pass
+    # 2. Add Valid Visitors/Subscribers (સુધી Validity બાકી હોય ત્યાં સુધી)
+    subscribers = get_firebase_data("subscribers")
+    if isinstance(subscribers, dict):
+        for cid, sdata in subscribers.items():
+            if isinstance(sdata, dict):
+                expire_at = sdata.get("expire_at", 0)
+                if expire_at > now:
+                    try:
+                        recipients.add(int(cid))
+                    except Exception:
+                        pass
 
     return list(recipients)
 
 
-# --- KEYBOARDS (UI) ---
+# --- KEYBOARDS (સંપૂર્ણ UI) ---
 
 def main_menu_keyboard(chat_id):
     markup = InlineKeyboardMarkup()
+    # Admin Panel અને Visitor Access બંને બટન દરેક યુઝરને દેખાશે
     markup.add(InlineKeyboardButton("🛠️ Admin Panel", callback_data="menu_admin"))
     markup.add(InlineKeyboardButton("👤 Visitor Access", callback_data="menu_visitor"))
     return markup
@@ -181,12 +150,14 @@ def monitoring_keyboard():
 
 def forest_dept_keyboard():
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("📹 Device (Gir Forest Live)", url="https://gir-forest-guardian.vercel.app/"))
+    markup.add(InlineKeyboardButton("📊 Monitoring (Gunshot Alerts)", callback_data="view_gunshots"))
+    markup.add(InlineKeyboardButton("📹 Device (Gir Forest Live)", url="https://highway-animle-sfaty.vercel.app/"))
     markup.add(InlineKeyboardButton("🔙 Back", callback_data="admin_monitoring"))
     return markup
 
 def highway_dept_keyboard():
     markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("📊 Monitoring (Animal Detection Alerts)", callback_data="view_animal_alerts"))
     markup.add(InlineKeyboardButton("📹 Device (RoadGuardian AI Dashboard)", url="https://highway-animle-sfaty.vercel.app/"))
     markup.add(InlineKeyboardButton("🔙 Back", callback_data="admin_monitoring"))
     return markup
@@ -219,7 +190,7 @@ def callback_listener(call):
         elif call.data == "menu_admin":
             if not is_admin(chat_id):
                 bot.answer_callback_query(call.id, "🔒 Enter admin password in chat first!")
-                set_user_state(chat_id, "awaiting_admin_password")
+                user_states[chat_id] = "awaiting_admin_password"
                 bot.send_message(chat_id, "🔐 Please enter the **Admin Password**:")
             else:
                 bot.edit_message_text("🛠️ *Admin Panel*", chat_id, message_id, parse_mode="Markdown", reply_markup=admin_menu_keyboard())
@@ -229,22 +200,25 @@ def callback_listener(call):
 
         elif call.data.startswith("dur_"):
             duration = call.data.split("_")[1]
-            set_user_state(chat_id, {"action": "awaiting_phone", "duration": duration})
+            user_states[chat_id] = {"action": "awaiting_phone", "duration": duration}
             bot.send_message(chat_id, f"📱 Selected duration: *{duration}*\nNow please type the Visitor's Phone Number:")
 
         elif call.data == "admin_monitoring":
             bot.edit_message_text("📡 *Monitoring System*", chat_id, message_id, parse_mode="Markdown", reply_markup=monitoring_keyboard())
 
         elif call.data == "mon_forest":
-            bot.edit_message_text("🌲 *Gir Forest Department Control*", chat_id, message_id, parse_mode="Markdown", reply_markup=forest_dept_keyboard())
+            bot.edit_message_text("🌲 *Forest Department*", chat_id, message_id, parse_mode="Markdown", reply_markup=forest_dept_keyboard())
 
         elif call.data == "mon_highway":
-            bot.edit_message_text("🛣️ *Highway Safety Department Control*", chat_id, message_id, parse_mode="Markdown", reply_markup=highway_dept_keyboard())
+            bot.edit_message_text("🛣️ *Highway Department*", chat_id, message_id, parse_mode="Markdown", reply_markup=highway_dept_keyboard())
 
         elif call.data == "menu_visitor":
-            set_user_state(chat_id, "awaiting_visitor_code")
-            bot.send_message(chat_id, "🎟️ *Visitor Access*\nPlease send or scan your Pass Code:")
+            user_states[chat_id] = "awaiting_visitor_code"
+            bot.send_message(chat_id, "🎟️ *Visitor Access*\nPlease enter your Pass Code:")
 
+        elif call.data in ["view_gunshots", "view_animal_alerts"]:
+            bot.answer_callback_query(call.id, "✅ Subscribed to real-time alerts!")
+            bot.send_message(chat_id, "📡 *Real-time Alerts Active!* You will receive immediate photo notifications when animals/gunshots are detected.")
     except Exception as e:
         print(f"Error in callback: {e}")
 
@@ -252,50 +226,40 @@ def callback_listener(call):
 def handle_text_inputs(message):
     chat_id = message.chat.id
     text = message.text.strip()
-    state = get_user_state(chat_id)
+    state = user_states.get(chat_id)
 
     try:
+        # 1. Admin Password Input
         if text == ADMIN_PASSWORD:
             add_admin(chat_id)
             bot.reply_to(message, "🎉 *Admin Access Granted!*", parse_mode="Markdown", reply_markup=admin_menu_keyboard())
-            clear_user_state(chat_id)
+            user_states.pop(chat_id, None)
             return
 
         if state == "awaiting_admin_password":
             bot.reply_to(message, "❌ Incorrect Password!")
-            clear_user_state(chat_id)
+            user_states.pop(chat_id, None)
             return
 
+        # 2. Visitor Code Generation (Phone input)
         if isinstance(state, dict) and state.get("action") == "awaiting_phone":
             duration = state.get("duration")
             phone = text
             code = "PASS-" + ''.join(random.choices(string.digits, k=6))
-
+            
             save_visitor_code(code, phone, duration)
-            
-            # Generate QR Code image
-            qr_stream = generate_qr_code_stream(code)
-            qr_stream.name = 'visitor_qr.png'
-
-            caption = (
-                f"✅ *Visitor Pass Created!*\n\n"
-                f"🎟️ **Pass Code:** `{code}`\n"
-                f"📱 **Phone:** {phone}\n"
-                f"⏱️ **Duration:** {duration}\n\n"
-                f"📷 *Visitors can scan this QR code or type the pass code directly.*"
-            )
-            
-            bot.send_photo(chat_id, photo=qr_stream, caption=caption, parse_mode="Markdown")
-            clear_user_state(chat_id)
+            bot.reply_to(message, f"✅ *Visitor Code Created!*\n\n🎟️ Code: `{code}`\n📱 Phone: {phone}\n⏱️ Duration: {duration}", parse_mode="Markdown")
+            user_states.pop(chat_id, None)
             return
 
+        # 3. Visitor Code Input by End User
         if state == "awaiting_visitor_code":
             success, duration = verify_and_register_visitor(chat_id, text)
             if success:
-                bot.reply_to(message, f"🎉 *Access Granted! You are Authorized.*\n\nWelcome! Your Chat ID has been granted to receive alerts.\n⏱️ Duration: *{duration}*", parse_mode="Markdown")
+                bot.reply_to(message, f"🎉 *Visitor Code Verified!*\n\nWelcome! Your Chat ID has been saved.\n⏱️ Access Duration: *{duration}*\n\nYou will now receive live alert photos!", parse_mode="Markdown")
             else:
-                bot.reply_to(message, "❌ Invalid or Expired Pass Code! Access Denied.")
-            clear_user_state(chat_id)
+                bot.reply_to(message, "❌ Invalid or Expired Pass Code!")
+            user_states.pop(chat_id, None)
             return
     except Exception as e:
         print(f"Error handling message: {e}")
@@ -309,62 +273,31 @@ def receive_alert_from_web():
     if 'photo' not in request.files or 'animal' not in request.form:
         return jsonify({"error": "Missing photo or animal name"}), 400
 
-    recipients = get_active_recipients()
-    if not recipients:
-        return jsonify({"status": "Ignored", "message": "No granted users found to receive this photo."}), 200
-
     animal = request.form['animal']
     photo_file = request.files['photo']
     photo_bytes = photo_file.read()
 
-    caption = f"🚨 *ROADGUARDIAN HIGHWAY ALERT*\n\n🐾 *Animal Detected:* {animal}\n📍 *Location:* Rajkot-Gondal Highway\n⚠️ *Drive with caution!*"
-
-    success_count = 0
-    for cid in recipients:
-        try:
-            photo_stream = io.BytesIO(photo_bytes)
-            photo_stream.name = 'alert.jpg'
-            bot.send_photo(chat_id=cid, photo=photo_stream, caption=caption, parse_mode="Markdown")
-            success_count += 1
-        except Exception as e:
-            print(f"Failed to send photo to {cid}: {e}")
-
-    return jsonify({"status": "Highway Alert sent", "sent_to_granted_count": success_count}), 200
-
-
-@app.route('/api/forest-alert', methods=['POST'])
-@app.route('/forest-alert', methods=['POST'])
-def receive_forest_alert():
-    if 'photo' not in request.files:
-        return jsonify({"error": "Missing photo file"}), 400
-
     recipients = get_active_recipients()
+
     if not recipients:
-        return jsonify({"status": "Ignored", "message": "No granted users found to receive this photo."}), 200
+        return jsonify({"status": "No active recipients found", "sent_to": 0}), 200
 
-    sound_label = request.form.get('label', 'GUNSHOT DETECTED')
-    photo_file = request.files['photo']
-    photo_bytes = photo_file.read()
-
-    caption = (
-        f"🚨 *GIR FOREST DEPARTMENT CRITICAL ALERT*\n\n"
-        f"💥 *Threat Detected:* {sound_label}\n"
-        f"📍 *Location:* Gir Forest Zone-1\n"
-        f"⚠️ *Immediate Action Required! Forest Range Officer Alerted.*"
-    )
+    caption = f"🚨 *ROADGUARDIAN ALERT*\n\n🐾 *Animal Detected:* {animal}\n📍 *Location:* Rajkot-Gondal Highway\n⚠️ *Drive with caution!*"
 
     success_count = 0
     for cid in recipients:
         try:
-            photo_stream = io.BytesIO(photo_bytes)
-            photo_stream.name = 'forest_alert.jpg'
-            bot.send_photo(chat_id=cid, photo=photo_stream, caption=caption, parse_mode="Markdown")
+            bot.send_photo(
+                chat_id=cid, 
+                photo=('alert.jpg', photo_bytes, 'image/jpeg'), 
+                caption=caption, 
+                parse_mode="Markdown"
+            )
             success_count += 1
         except Exception as e:
             print(f"Failed to send photo to {cid}: {e}")
 
-    return jsonify({"status": "Forest Alert sent", "sent_to_granted_count": success_count}), 200
-
+    return jsonify({"status": "Alert sent", "sent_to": success_count}), 200
 
 @app.route('/api/webhook', methods=['POST', 'GET'])
 @app.route('/webhook', methods=['POST', 'GET'])
@@ -383,7 +316,6 @@ def telegram_webhook():
             return 'Error', 500
     return 'Bad Request', 400
 
-
 @app.route('/', methods=['GET'])
 def index_check():
-    return "🚀 Active Backend: QR Code Generator & Alert System Enabled!", 200
+    return "🚀 RoadGuardian Vercel Python Backend Active!", 200
