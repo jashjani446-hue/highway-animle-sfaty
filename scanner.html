@@ -3,28 +3,79 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RoadGuardian - Professional QR Scanner</title>
+  <title>Google Lens Style QR Scanner</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
-    body { font-family: Arial, sans-serif; background: #0f172a; color: white; text-align: center; padding: 20px; }
-    #reader { width: 100%; max-width: 450px; margin: auto; border: 2px solid #38bdf8; border-radius: 12px; overflow: hidden; }
-    .status { margin-top: 15px; font-size: 18px; font-weight: bold; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #0f172a;
+      color: white;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .scanner-card {
+      width: 90%;
+      max-width: 400px;
+      background: #1e293b;
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      text-align: center;
+    }
+    #reader {
+      width: 100%;
+      border-radius: 15px;
+      overflow: hidden;
+      border: 3px solid #38bdf8;
+    }
+    .status {
+      margin-top: 15px;
+      font-size: 16px;
+      color: #38bdf8;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
 
-  <h2>🎥 Visitor QR Code Live Scanner</h2>
-  <div id="reader"></div>
-  <div class="status" id="result">Scanning for QR code...</div>
+  <div class="scanner-card">
+    <h2>📷 Google Lens QR Scanner</h2>
+    <p style="color: #94a3b8; font-size: 14px;">QR કોડ સામે કેમેરો રાખો, સીધું જ ઓટો-કનેક્ટ થઇ જશે.</p>
+    <div id="reader"></div>
+    <div class="status" id="status-text">Scanning Live...</div>
+  </div>
 
   <script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+
     function onScanSuccess(decodedText, decodedResult) {
-      document.getElementById('result').innerHTML = `<span style="color:#4ade80;">✅ Scanned: ${decodedText}</span>`;
-      alert("Scanned Pass Code: " + decodedText + "\n\nPlease send this code to your Telegram Bot!");
+      document.getElementById('status-text').innerHTML = `<span style="color:#4ade80;">✅ Verified: ${decodedText}</span>`;
+      
+      // ૧. ટેલિગ્રામ Mini App ડેટા સેન્ડર (ડાયરેક્ટ ઓટો કનેક્ટ)
+      if (tg.sendData) {
+        tg.sendData(decodedText);
+      } else {
+        alert("Scanned Code: " + decodedText);
+      }
     }
 
     let html5QrcodeScanner = new Html5QrcodeScanner(
-      "reader", { fps: 10, qrbox: { width: 250, height: 250 } }, false);
+      "reader", 
+      { 
+        fps: 15, 
+        qrbox: { width: 250, height: 250 },
+        facingMode: "environment" // પાછળનો કેમેરો ઓટોમેટિક શરૂ કરશે
+      }, 
+      false
+    );
     html5QrcodeScanner.render(onScanSuccess);
   </script>
 </body>
