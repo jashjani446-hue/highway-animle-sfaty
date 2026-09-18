@@ -3,13 +3,13 @@ import random
 import string
 import time
 import io
+import urllib.parse
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# Environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8560832618:AAFxHDrVvAEHDR1zKUtK1glQq0RWMsYrWXk")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "jashjani")
 FIREBASE_BASE_URL = os.getenv(
@@ -21,7 +21,7 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = Flask(__name__)
 CORS(app)
 
-# --- FIREBASE HELPER FUNCTIONS ---
+# --- FIREBASE HELPERS ---
 
 def set_firebase_data(path, data):
     try:
@@ -42,9 +42,7 @@ def get_firebase_data(path):
 
 def is_admin(chat_id):
     admins = get_firebase_data("admins")
-    if isinstance(admins, dict):
-        return str(chat_id) in admins
-    return False
+    return isinstance(admins, dict) and str(chat_id) in admins
 
 def add_admin(chat_id):
     set_firebase_data(f"admins/{str(chat_id)}", True)
@@ -57,22 +55,16 @@ def get_user_state(chat_id):
 
 def clear_user_state(chat_id):
     try:
-        url = f"{FIREBASE_BASE_URL}/user_states/{str(chat_id)}.json"
-        requests.delete(url, timeout=5)
+        requests.delete(f"{FIREBASE_BASE_URL}/user_states/{str(chat_id)}.json", timeout=5)
     except Exception as e:
-        print(f"Firebase Delete Error: {e}")
+        print(f"Delete State Error: {e}")
 
 def save_visitor_code(code, phone, duration_str):
     seconds_map = {
-        "10m": 10 * 60,
-        "1h": 3600,
-        "5h": 5 * 3600,
-        "10h": 10 * 3600,
-        "24h": 24 * 3600,
-        "always": 100 * 365 * 86400
+        "10m": 600, "1h": 3600, "5h": 18000, 
+        "10h": 36000, "24h": 86400, "always": 3153600000
     }
     dur_sec = seconds_map.get(str(duration_str).lower(), 3600)
-
     code_data = {
         "phone": phone,
         "duration_str": duration_str,
@@ -85,9 +77,7 @@ def verify_and_register_visitor(chat_id, code):
     codes = get_firebase_data("codes")
     if isinstance(codes, dict) and code in codes:
         c_data = codes[code]
-        dur_sec = c_data.get("dur_sec", 3600)
-        expire_timestamp = time.time() + dur_sec
-
+        expire_timestamp = time.time() + c_data.get("dur_sec", 3600)
         subscriber_data = {
             "code": code,
             "phone": c_data.get("phone", ""),
@@ -101,44 +91,30 @@ def verify_and_register_visitor(chat_id, code):
 def get_active_recipients():
     recipients = set()
     now = time.time()
-
     root_data = get_firebase_data("")
     if isinstance(root_data, dict):
         admins = root_data.get("admins", {})
         if isinstance(admins, dict):
-            for admin_id in admins.keys():
-                try:
-                    recipients.add(str(admin_id))
-                except Exception:
-                    pass
-
+            for aid in admins.keys(): recipients.add(str(aid))
         subscribers = root_data.get("subscribers", {})
         if isinstance(subscribers, dict):
             for cid, sdata in subscribers.items():
-                if isinstance(sdata, dict):
-                    expire_at = sdata.get("expire_at", 0)
-                    if expire_at > now:
-                        try:
-                            recipients.add(str(cid))
-                        except Exception:
-                            pass
-
+                if isinstance(sdata, dict) and sdata.get("expire_at", 0) > now:
+                    recipients.add(str(cid))
     return list(recipients)
 
+# --- BOT KEYBOARDS ---
 
-# --- TELEGRAM BOT UI & KEYBOARDS ---
-
-def main_menu_keyboard(chat_id):
+def main_menu_keyboard():
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("🛠️ Admin Panel", callback_data="menu_admin"))
-    markup.add(InlineKeyboardButton("👤 Visitor Access (Code/QR)", callback_data="menu_visitor"))
+    markup.add(InlineKeyboardButton("👤 Visitor Access", callback_data="menu_visitor"))
     return markup
 
 def admin_menu_keyboard():
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("🔑 Make QR Pass Code", callback_data="admin_make_code"))
-    markup.add(InlineKeyboardButton("📡 Monitoring Control", callback_data="admin_monitoring"))
-    markup.add(InlineKeyboardButton("🔙 Back to Main", callback_data="menu_main"))
+    markup.add(InlineKeyboardButton("🔑 Generate Dynamic QR Pass", callback_data="admin_make_code"))
+    markup.add(InlineKeyboardButton("🔙 Main Menu", callback_data="menu_main"))
     return markup
 
 def duration_keyboard():
@@ -151,87 +127,51 @@ def duration_keyboard():
         InlineKeyboardButton("24h", callback_data="dur_24h"),
         InlineKeyboardButton("Always", callback_data="dur_always")
     )
-    markup.add(InlineKeyboardButton("🔙 Back", callback_data="menu_admin"))
     return markup
 
-def monitoring_keyboard():
-    markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("🌲 Forest Department Dashboard", url="https://gir-forest-guardian.vercel.app/"))
-    markup.add(InlineKeyboardButton("🛣️ Highway Safety Dashboard", url="https://highway-animle-sfaty.vercel.app/"))
-    markup.add(InlineKeyboardButton("🔙 Back", callback_data="menu_admin"))
-    return markup
-
-
-# --- TELEGRAM BOT HANDLERS ---
+# --- BOT HANDLERS ---
 
 @bot.message_handler(commands=['start', 'menu'])
 def send_welcome(message):
-    chat_id = message.chat.id
-    try:
-        bot.send_message(
-            chat_id, 
-            "🏠 *RoadGuardian Safety Control System*\n\nPlease choose an option:", 
-            parse_mode="Markdown", 
-            reply_markup=main_menu_keyboard(chat_id)
-        )
-    except Exception as e:
-        print(f"Error in send_welcome: {e}")
+    bot.send_message(message.chat.id, "🏠 *RoadGuardian Control Panel*", parse_mode="Markdown", reply_markup=main_menu_keyboard())
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_listener(call):
     chat_id = call.message.chat.id
-    message_id = call.message.message_id
+    msg_id = call.message.message_id
 
-    try:
-        if call.data == "menu_main":
-            bot.edit_message_text("🏠 *Main Menu*", chat_id, message_id, parse_mode="Markdown", reply_markup=main_menu_keyboard(chat_id))
+    if call.data == "menu_main":
+        bot.edit_message_text("🏠 *Main Menu*", chat_id, msg_id, reply_markup=main_menu_keyboard())
+    elif call.data == "menu_admin":
+        if not is_admin(chat_id):
+            set_user_state(chat_id, "awaiting_admin_password")
+            bot.send_message(chat_id, "🔐 Enter Admin Password:")
+        else:
+            bot.edit_message_text("🛠️ *Admin Panel*", chat_id, msg_id, parse_mode="Markdown", reply_markup=admin_menu_keyboard())
+    elif call.data == "admin_make_code":
+        bot.edit_message_text("🔑 Select Pass Duration:", chat_id, msg_id, reply_markup=duration_keyboard())
+    elif call.data.startswith("dur_"):
+        duration = call.data.split("_")[1]
+        set_user_state(chat_id, {"action": "awaiting_phone", "duration": duration})
+        bot.send_message(chat_id, f"📱 Selected: *{duration}*\nNow type Visitor's Phone Number:")
+    elif call.data == "menu_visitor":
+        set_user_state(chat_id, "awaiting_visitor_code")
+        bot.send_message(chat_id, "🎟️ Send Pass Code OR Photo of the QR Code:")
 
-        elif call.data == "menu_admin":
-            if not is_admin(chat_id):
-                bot.answer_callback_query(call.id, "🔒 Enter Admin Password in chat!")
-                set_user_state(chat_id, "awaiting_admin_password")
-                bot.send_message(chat_id, "🔐 Please enter the **Admin Password**:")
-            else:
-                bot.edit_message_text("🛠️ *Admin Panel*", chat_id, message_id, parse_mode="Markdown", reply_markup=admin_menu_keyboard())
-
-        elif call.data == "admin_make_code":
-            bot.edit_message_text("🔑 *Make Visitor Pass Code*\nSelect Pass Duration:", chat_id, message_id, parse_mode="Markdown", reply_markup=duration_keyboard())
-
-        elif call.data.startswith("dur_"):
-            duration = call.data.split("_")[1]
-            set_user_state(chat_id, {"action": "awaiting_phone", "duration": duration})
-            bot.send_message(chat_id, f"📱 Selected Duration: *{duration}*\nNow type the Visitor's Phone Number:")
-
-        elif call.data == "admin_monitoring":
-            bot.edit_message_text("📡 *Monitoring System*", chat_id, message_id, parse_mode="Markdown", reply_markup=monitoring_keyboard())
-
-        elif call.data == "menu_visitor":
-            set_user_state(chat_id, "awaiting_visitor_code")
-            bot.send_message(chat_id, "🎟️ *Visitor Access*\nPlease enter your Pass Code or send the **QR Code Image**:")
-
-    except Exception as e:
-        print(f"Error in callback: {e}")
-
-
-# 📲 Handle QR Code Photo sent by Visitor
 @bot.message_handler(content_types=['photo'])
-def handle_photo(message):
+def handle_photo_qr(message):
     chat_id = message.chat.id
-    state = get_user_state(chat_id)
-
-    if state == "awaiting_visitor_code":
+    if get_user_state(chat_id) == "awaiting_visitor_code":
         try:
-            # Fetch highest resolution photo from Telegram
             file_info = bot.get_file(message.photo[-1].file_id)
-            file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_info.file_path}"
-
-            # Use QR Code Decoder API to read QR content
-            qr_api_url = f"https://api.qrserver.com/v1/read-qr-code/?fileurl={file_url}"
-            res = requests.get(qr_api_url, timeout=10).json()
-
+            img_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_info.file_path}"
+            
+            # Read QR Code via API
+            qr_res = requests.get(f"https://api.qrserver.com/v1/read-qr-code/?fileurl={urllib.parse.quote(img_url)}", timeout=10).json()
+            
             extracted_code = None
-            if res and isinstance(res, list) and len(res) > 0:
-                symbol = res[0].get('symbol', [])
+            if qr_res and len(qr_res) > 0:
+                symbol = qr_res[0].get('symbol', [])
                 if symbol and len(symbol) > 0:
                     extracted_code = symbol[0].get('data')
 
@@ -239,163 +179,90 @@ def handle_photo(message):
                 code_clean = extracted_code.strip()
                 success, duration = verify_and_register_visitor(chat_id, code_clean)
                 if success:
-                    bot.reply_to(message, f"🎉 *QR Code Verified! Access Granted.*\n\nWelcome! You will now receive live safety alerts on this chat.\n⏱️ Duration: *{duration}*", parse_mode="Markdown")
+                    bot.reply_to(message, f"🎉 *QR Verified! Access Granted.*\n⏱️ Duration: *{duration}*", parse_mode="Markdown")
                 else:
-                    bot.reply_to(message, f"❌ QR Code contains invalid or expired pass: `{code_clean}`", parse_mode="Markdown")
+                    bot.reply_to(message, f"❌ Invalid or Expired Pass Code in QR: `{code_clean}`", parse_mode="Markdown")
             else:
-                bot.reply_to(message, "❌ Could not read QR code from image. Please try again or type the text code manually.")
-
+                bot.reply_to(message, "❌ Could not detect QR code in image. Make sure image is clear.")
             clear_user_state(chat_id)
         except Exception as e:
-            print(f"Error processing QR Code image: {e}")
-            bot.reply_to(message, "❌ Error scanning QR code image. Please type your Pass Code manually.")
+            bot.reply_to(message, "❌ Error reading QR Code.")
 
-
-# 📝 Handle Text Inputs
 @bot.message_handler(func=lambda message: True)
-def handle_text_inputs(message):
+def handle_text(message):
     chat_id = message.chat.id
     text = message.text.strip()
     state = get_user_state(chat_id)
 
-    try:
-        # 🔑 Admin Password Verification
-        if text == ADMIN_PASSWORD:
-            add_admin(chat_id)
-            bot.reply_to(message, "🎉 *Admin Access Granted!*", parse_mode="Markdown", reply_markup=admin_menu_keyboard())
-            clear_user_state(chat_id)
-            return
+    if text == ADMIN_PASSWORD:
+        add_admin(chat_id)
+        bot.reply_to(message, "🎉 *Admin Granted!*", parse_mode="Markdown", reply_markup=admin_menu_keyboard())
+        clear_user_state(chat_id)
+        return
 
-        if state == "awaiting_admin_password":
-            bot.reply_to(message, "❌ Incorrect Password! Try again.")
-            clear_user_state(chat_id)
-            return
+    if isinstance(state, dict) and state.get("action") == "awaiting_phone":
+        duration = state.get("duration")
+        code = "PASS-" + ''.join(random.choices(string.digits, k=6))
+        save_visitor_code(code, text, duration)
 
-        # 🎫 Generate Visitor Pass Code & QR Image
-        if isinstance(state, dict) and state.get("action") == "awaiting_phone":
-            duration = state.get("duration")
-            phone = text
-            code = "PASS-" + ''.join(random.choices(string.digits, k=6))
+        # Generating Dynamic Clear Text QR Image
+        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=400x400&data={urllib.parse.quote(code)}"
 
-            save_visitor_code(code, phone, duration)
+        caption = (
+            f"✅ *DYNAMIC VISITOR QR PASS*\n\n"
+            f"🎟️ Code: `{code}`\n"
+            f"📱 Phone: {text}\n"
+            f"⏱️ Duration: {duration}\n\n"
+            f"🔍 *This QR code contains explicit data (`{code}`) verifiable by Google Lens or any Scanner.*"
+        )
+        bot.send_photo(chat_id, photo=qr_url, caption=caption, parse_mode="Markdown")
+        clear_user_state(chat_id)
+        return
 
-            # Dynamic QR Code Image Generation API URL
-            qr_image_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={code}"
+    if state == "awaiting_visitor_code":
+        success, duration = verify_and_register_visitor(chat_id, text)
+        if success:
+            bot.reply_to(message, f"🎉 *Access Granted!*\n⏱️ Duration: *{duration}*", parse_mode="Markdown")
+        else:
+            bot.reply_to(message, "❌ Invalid Pass Code!")
+        clear_user_state(chat_id)
 
-            caption = (
-                f"✅ *Visitor Pass Code Created!*\n\n"
-                f"🎟️ Pass Code: `{code}`\n"
-                f"📱 Phone: {phone}\n"
-                f"⏱️ Duration: {duration}\n\n"
-                f"📲 *Forward this QR Code or Pass Code to the visitor!*"
-            )
-            bot.send_photo(chat_id, photo=qr_image_url, caption=caption, parse_mode="Markdown")
-            clear_user_state(chat_id)
-            return
-
-        # 🎟️ Manual Visitor Code Entry
-        if state == "awaiting_visitor_code":
-            success, duration = verify_and_register_visitor(chat_id, text)
-            if success:
-                bot.reply_to(message, f"🎉 *Access Granted! You are now Authorized.*\n\nWelcome! You will now receive live safety alerts on this chat.\n⏱️ Duration: *{duration}*", parse_mode="Markdown")
-            else:
-                bot.reply_to(message, "❌ Invalid or Expired Pass Code! Access Denied.")
-            clear_user_state(chat_id)
-            return
-    except Exception as e:
-        print(f"Error handling text input: {e}")
-
-
-# --- API ENDPOINTS FOR HTML WEB ALERTS ---
+# --- ALERTS API ---
 
 @app.route('/api/alert', methods=['POST'])
 @app.route('/alert', methods=['POST'])
-def receive_highway_alert():
-    if 'photo' not in request.files:
-        return jsonify({"error": "Missing photo file"}), 400
-
+def highway_alert():
+    if 'photo' not in request.files: return jsonify({"error": "No photo"}), 400
     recipients = get_active_recipients()
-    if not recipients:
-        return jsonify({"status": "Ignored", "message": "No granted users found to receive alert."}), 200
+    photo_bytes = request.files['photo'].read()
+    animal = request.form.get('animal', 'ANIMAL DETECTED')
 
-    animal = request.form.get('animal', 'ANIMAL ON ROAD')
-    photo_file = request.files['photo']
-    photo_bytes = photo_file.read()
-
-    caption = (
-        f"🚨 *ROADGUARDIAN HIGHWAY ALERT*\n\n"
-        f"🐾 *Detected Threat:* {animal}\n"
-        f"📍 *Location:* Rajkot-Gondal Highway\n"
-        f"⚠️ *Drive with caution!*"
-    )
-
-    success_count = 0
     for cid in recipients:
         try:
-            photo_stream = io.BytesIO(photo_bytes)
-            photo_stream.name = 'highway_alert.jpg'
-            bot.send_photo(chat_id=cid, photo=photo_stream, caption=caption, parse_mode="Markdown")
-            success_count += 1
-        except Exception as e:
-            print(f"Failed sending alert to {cid}: {e}")
-
-    return jsonify({"status": "Highway Alert sent", "sent_to_count": success_count}), 200
-
+            bot.send_photo(cid, photo=io.BytesIO(photo_bytes), caption=f"🚨 *HIGHWAY ALERT*\n🐾 Threat: {animal}", parse_mode="Markdown")
+        except: pass
+    return jsonify({"status": "Sent", "recipients": len(recipients)}), 200
 
 @app.route('/api/forest-alert', methods=['POST'])
 @app.route('/forest-alert', methods=['POST'])
-def receive_forest_alert():
-    if 'photo' not in request.files:
-        return jsonify({"error": "Missing photo file"}), 400
-
+def forest_alert():
+    if 'photo' not in request.files: return jsonify({"error": "No photo"}), 400
     recipients = get_active_recipients()
-    if not recipients:
-        return jsonify({"status": "Ignored", "message": "No granted users found to receive alert."}), 200
+    photo_bytes = request.files['photo'].read()
+    label = request.form.get('label', 'GUNSHOT DETECTED')
 
-    sound_label = request.form.get('label', 'GUNSHOT DETECTED')
-    photo_file = request.files['photo']
-    photo_bytes = photo_file.read()
-
-    caption = (
-        f"🚨 *GIR FOREST DEPARTMENT CRITICAL ALERT*\n\n"
-        f"💥 *Threat Detected:* {sound_label}\n"
-        f"📍 *Location:* Gir Forest Zone-1\n"
-        f"⚠️ *Immediate Action Required! Forest Range Officer Alerted.*"
-    )
-
-    success_count = 0
     for cid in recipients:
         try:
-            photo_stream = io.BytesIO(photo_bytes)
-            photo_stream.name = 'forest_alert.jpg'
-            bot.send_photo(chat_id=cid, photo=photo_stream, caption=caption, parse_mode="Markdown")
-            success_count += 1
-        except Exception as e:
-            print(f"Failed sending alert to {cid}: {e}")
+            bot.send_photo(cid, photo=io.BytesIO(photo_bytes), caption=f"🚨 *GIR FOREST ALERT*\n💥 Threat: {label}", parse_mode="Markdown")
+        except: pass
+    return jsonify({"status": "Sent", "recipients": len(recipients)}), 200
 
-    return jsonify({"status": "Forest Alert sent", "sent_to_count": success_count}), 200
-
-
-@app.route('/api/webhook', methods=['POST', 'GET'])
 @app.route('/webhook', methods=['POST', 'GET'])
-def telegram_webhook():
-    if request.method == 'GET':
-        return "Webhook Endpoint Ready!", 200
-
-    if request.headers.get('content-type') == 'application/json':
-        try:
-            json_string = request.get_data().decode('utf-8')
-            update = telebot.types.Update.de_json(json_string)
-            bot.process_new_updates([update])
-            return 'OK', 200
-        except Exception as e:
-            print(f"Webhook processing error: {e}")
-            return 'Error', 500
-    return 'Bad Request', 400
-
+def webhook():
+    if request.method == 'POST':
+        bot.process_new_updates([telebot.types.Update.de_json(request.get_data().decode('utf-8'))])
+        return 'OK', 200
+    return 'OK', 200
 
 @app.route('/', methods=['GET'])
-def index_check():
-    return "🚀 Road Guardian Vercel Backend Running!", 200
-
-app_instance = app
+def index(): return "RoadGuardian QR Backend Active!", 200
