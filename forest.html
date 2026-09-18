@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ગીર ફોરેસ્ટ ગનશૂટ સિસ્ટમ</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background-color: #121212; color: #ffffff; font-family: 'Segoe UI', Arial, sans-serif; text-align: center; }
+    .dept-page { padding: 20px; max-width: 500px; margin: 0 auto; }
+    .btn-back { background: #333; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-bottom: 15px; float: left; text-decoration: none; display: inline-block; }
+    .card { background: #1e1e1e; border-radius: 12px; padding: 20px; margin-top: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); clear: both; }
+    .status-box { padding: 20px; margin-top: 10px; font-size: 18px; font-weight: bold; border-radius: 8px; transition: 0.3s; }
+    .safe { background-color: #2e7d32; color: #ffffff; }
+    .alert { background-color: #c62828; color: #ffffff; animation: blink 0.8s infinite; }
+    @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+    .webcam-box { position: relative; border: 2px solid #2e7d32; border-radius: 8px; overflow: hidden; background: #000; margin-top: 15px; min-height: 240px; }
+    video, canvas { width: 100%; height: auto; display: block; }
+    .btn-start { background: #00e676; color: #000; border: none; padding: 12px 24px; font-weight: bold; font-size: 16px; border-radius: 6px; cursor: pointer; margin-bottom: 15px; width: 100%; }
+    .label-box { margin-top: 10px; text-align: left; font-size: 14px; color: #00e676; background: #111; padding: 10px; border-radius: 6px; min-height: 50px; }
+    .settings-panel { background: #282828; border: 1px solid #444; border-radius: 8px; padding: 15px; margin-top: 15px; text-align: left; }
+    .settings-panel h3 { font-size: 16px; color: #00e676; margin-bottom: 12px; }
+    .setting-group { margin-bottom: 12px; }
+    .setting-group label { font-size: 13px; display: block; margin-bottom: 5px; color: #ddd; }
+    .setting-group input[type=range] { width: 100%; cursor: pointer; }
+    .val-display { float: right; font-weight: bold; color: #00e676; }
+  </style>
+</head>
+<body>
+
+  <div class="dept-page">
+    <a href="index.html" class="btn-back">⬅️ હોમ પેજ</a>
+    <div class="card">
+      <h2>🌳 ગીર ફોરેસ્ટ ગનશૂટ સિસ્ટમ</h2>
+      <button class="btn-start" id="startForestBtn" onclick="startForestSystem()">▶️ ફોરેસ્ટ કેમેરા & ઓડિયો શરૂ કરો</button>
+      <div id="forestStatus" class="status-box safe">સિસ્ટમ તૈયાર છે - START દબાવો</div>
+
+      <div class="settings-panel">
+        <h3>⚙️ ઓડિયો & ડિટેક્શન સેટિંગ્સ</h3>
+        <div class="setting-group">
+          <label>ઓડિયો સેન્સિટિવિટી (Gain): <span id="gainVal" class="val-display">1.5x</span></label>
+          <input type="range" id="audioGainSlider" min="0.5" max="5.0" step="0.1" value="1.5">
+        </div>
+        <div class="setting-group">
+          <label>ગનશૂટ ડિટેક્શન થ્રેશોલ્ડ (%): <span id="threshVal" class="val-display">85%</span></label>
+          <input type="range" id="thresholdSlider" min="0.50" max="0.99" step="0.01" value="0.85">
+        </div>
+      </div>
+
+      <div class="webcam-box">
+        <video id="forestWebcam" autoplay playsinline muted></video>
+      </div>
+      <div id="label-container-forest" class="label-box">ઓડિયો વિશ્લેષણ અહીં દેખાશે...</div>
+    </div>
+  </div>
+
+  <canvas id="photoCanvas" style="display:none;"></canvas>
+
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.4.0/dist/speech-commands.min.js"></script>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+    const BACKEND_URL = "https://highway-animle-sfaty.vercel.app";
+    const firebaseConfig = { databaseURL: "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app" };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const EMAILJS_SERVICE_ID = "service_ejth1ry";
+    const EMAILJS_PUBLIC_KEY = "nD62NJ1rVHL_1RsbX";
+    const EMAILJS_TEMPLATE_ID_FOREST = "template_b3kykei";
+    emailjs.init(EMAILJS_PUBLIC_KEY);
+
+    const FOREST_MODEL_URL = "https://teachablemachine.withgoogle.com/models/DLoC1yucZ/";
+
+    let isForestAlerting = false;
+    let detectionThreshold = 0.85;
+    let gainNode = null;
+
+    document.getElementById('thresholdSlider').addEventListener('input', (e) => {
+      detectionThreshold = parseFloat(e.target.value);
+      document.getElementById('threshVal').innerText = Math.round(detectionThreshold * 100) + "%";
+    });
+
+    document.getElementById('audioGainSlider').addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      document.getElementById('gainVal').innerText = val.toFixed(1) + "x";
+      if (gainNode) gainNode.gain.value = val;
+    });
+
+    function dataURLtoBlob(dataurl) {
+      try {
+        let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1], bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+        while(n--){ u8arr[n] = bstr.charCodeAt(n); }
+        return new Blob([u8arr], {type:mime});
+      } catch(e) { return null; }
+    }
+
+    function grabSnapshot(videoElement) {
+      const photoCanvas = document.getElementById('photoCanvas');
+      photoCanvas.width = 320; photoCanvas.height = 240;
+      const ctx = photoCanvas.getContext('2d');
+      try {
+        if (videoElement && videoElement.readyState >= 2) {
+          ctx.drawImage(videoElement, 0, 0, 320, 240);
+          return photoCanvas.toDataURL('image/jpeg', 0.4);
+        }
+        return "";
+      } catch (e) { return ""; }
+    }
+
+    function sendTelegramPhotoAlert(type, videoElem) {
+      const liveSnapshot = grabSnapshot(videoElem);
+      if (!liveSnapshot) return;
+      const blob = dataURLtoBlob(liveSnapshot);
+      if (!blob) return;
+
+      const formData = new FormData();
+      formData.append('photo', blob, 'alert_snapshot.jpg');
+      formData.append('type', type);
+      formData.append('label', 'GUNSHOT DETECTED');
+
+      fetch(`${BACKEND_URL}/api/forest-alert`, { method: 'POST', body: formData })
+      .then(res => res.json())
+      .then(data => console.log("Telegram Dispatch Status:", data))
+      .catch(err => console.error("Telegram Alert Error:", err));
+    }
+
+    function sendEmailAlert(target, alertDetail, videoElem, templateId) {
+      const liveSnapshot = grabSnapshot(videoElem);
+      if (!liveSnapshot) return;
+
+      const templateParams = {
+        to_name: target,
+        alert_time: new Date().toLocaleString(),
+        image_data: liveSnapshot,
+        message: alertDetail
+      };
+
+      emailjs.send(EMAILJS_SERVICE_ID, templateId, templateParams)
+        .then((res) => console.log("Email Sent Successfully! Status:", res.status))
+        .catch((err) => console.error("Email Sending Failed:", err));
+    }
+
+    window.startForestSystem = async function() {
+      document.getElementById('startForestBtn').style.display = 'none';
+      const forestBox = document.getElementById('forestStatus');
+      const forestVideo = document.getElementById('forestWebcam');
+      forestBox.innerText = "કેમેરા કનેક્ટ થઈ રહ્યો છે...";
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: true });
+        forestVideo.srcObject = stream;
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioCtx.createMediaStreamSource(stream);
+        gainNode = audioCtx.createGain();
+        gainNode.gain.value = parseFloat(document.getElementById('audioGainSlider').value);
+        source.connect(gainNode);
+
+        forestBox.innerText = "ફોરેસ્ટ મોનિટરિંગ સક્રિય...";
+      } catch (err) {
+        forestBox.className = "status-box alert";
+        forestBox.innerText = "કેમેરા ભૂલ: " + err.message;
+        return;
+      }
+
+      try {
+        const recognizer = speechCommands.create("BROWSER_FFT", undefined, FOREST_MODEL_URL + "model.json", FOREST_MODEL_URL + "metadata.json");
+        await recognizer.ensureModelLoaded();
+        const classLabels = recognizer.wordLabels();
+        const labelContainer = document.getElementById("label-container-forest");
+        labelContainer.innerHTML = "";
+        for (let i = 0; i < classLabels.length; i++) {
+          labelContainer.appendChild(document.createElement("div"));
+        }
+
+        recognizer.listen(result => {
+          const scores = result.scores;
+          for (let i = 0; i < classLabels.length; i++) {
+            labelContainer.childNodes[i].innerHTML = classLabels[i] + ": " + scores[i].toFixed(2);
+            const labelName = classLabels[i].toLowerCase();
+            
+            if (scores[i] >= detectionThreshold && (labelName.includes("gunshoot") || labelName.includes("gunshot")) && !isForestAlerting) {
+              isForestAlerting = true;
+              set(ref(db, 'status'), 1);
+
+              forestBox.className = "status-box alert";
+              forestBox.innerText = "🚨 ALERT: બંદૂકનો અવાજ શોધી કાઢ્યો!";
+
+              sendEmailAlert("Forest Officer", "Gunshot Detected", forestVideo, EMAILJS_TEMPLATE_ID_FOREST);
+              sendTelegramPhotoAlert("GUNSHOT", forestVideo);
+
+              setTimeout(() => {
+                set(ref(db, 'status'), 0);
+                forestBox.className = "status-box safe";
+                forestBox.innerText = "ફોરેસ્ટ મોનિટરિંગ સક્રિય...";
+                isForestAlerting = false;
+              }, 4000);
+            }
+          }
+        }, { includeSpectrogram: false, probabilityThreshold: 0.70, invokeCallbackOnNoiseAndUnknown: true, overlapFactor: 0.50 });
+
+      } catch (e) { alert("Forest Error: " + e.message); }
+    };
+  </script>
+</body>
+</html>
