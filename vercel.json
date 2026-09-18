@@ -4,12 +4,36 @@
     {
       "src": "main.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "index.html",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
     {
-      "src": "/(.*)",
+      "src": "/api/(.*)",
       "dest": "main.py"
+    },
+    {
+      "src": "/webhook",
+      "dest": "main.py"
+    },
+    {
+      "src": "/scanner",
+      "dest": "main.py"
+    },
+    {
+      "src": "/alert",
+      "dest": "main.py"
+    },
+    {
+      "src": "/forest-alert",
+      "dest": "main.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
