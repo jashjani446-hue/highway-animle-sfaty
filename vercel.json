@@ -6,7 +6,7 @@
       "use": "@vercel/python"
     },
     {
-      "src": "index.html",
+      "src": "*.html",
       "use": "@vercel/static"
     }
   ],
@@ -30,6 +30,14 @@
     {
       "src": "/forest-alert",
       "dest": "main.py"
+    },
+    {
+      "src": "/forest.html",
+      "dest": "/forest.html"
+    },
+    {
+      "src": "/highway.html",
+      "dest": "/highway.html"
     },
     {
       "src": "/(.*)",
