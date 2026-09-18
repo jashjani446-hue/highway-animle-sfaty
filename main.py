@@ -16,21 +16,22 @@ FIREBASE_BASE_URL = os.getenv(
     "FIREBASE_BASE_URL", 
     "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian"
 )
-# તમારી Vercel લાઈવ URL આ જગ્યાએ સેટ કરો
-SERVER_URL = os.getenv("SERVER_URL", "https://your-actual-vercel-app.vercel.app")
+
+# તમારું Vercel / Deployment URL અહીં ઉમેરો
+SERVER_URL = os.getenv("SERVER_URL", "https://highway-animle-sfaty.vercel.app")
 
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = Flask(__name__)
 CORS(app)
 
-# --- DIRECT CAMERA SCANNER WEBAPP HTML ---
+# --- GOOGLE LENS STYLE CAMERA SCANNER (HTML) ---
 SCANNER_HTML = """
 <!DOCTYPE html>
 <html lang="gu">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Google Lens QR Scanner</title>
+  <title>Google Lens Style Scanner</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
@@ -70,7 +71,7 @@ SCANNER_HTML = """
 </head>
 <body>
   <div class="scanner-card">
-    <h2>📷 Google Lens Scanner</h2>
+    <h2>📷 Live Camera Scanner</h2>
     <p style="color: #94a3b8; font-size: 13px;">QR કોડ સામે કેમેરો રાખો, સીધું જ ઓટો-કનેક્ટ થઈ જશે.</p>
     <div id="reader"></div>
     <div class="status" id="status-text">Scanning Live...</div>
@@ -101,7 +102,7 @@ SCANNER_HTML = """
 </html>
 """
 
-# --- FIREBASE HELPERS ---
+# --- FIREBASE HELPER FUNCTIONS ---
 def set_firebase_data(path, data):
     try:
         requests.put(f"{FIREBASE_BASE_URL}/{path}.json", json=data, timeout=5)
@@ -167,7 +168,7 @@ def admin_panel_keyboard():
 def send_welcome(message):
     bot.send_message(
         message.chat.id, 
-        "🏠 *RoadGuardian Safety System*\n\nતમારું સ્વાગત છે! કેમેરા વડે સ્કેન કરવા માટે નીચે આપેલું બટન દબાવો:", 
+        "🏠 *RoadGuardian Safety System*\n\nસ્વાગત છે! સ્કેન કરવા નીચે આપેલું Direct Camera Scanner બટન વાપરો:", 
         parse_mode="Markdown", 
         reply_markup=main_menu_keyboard()
     )
@@ -178,14 +179,14 @@ def admin_login(message):
     if is_admin(chat_id):
         bot.send_message(chat_id, "🛠️ *Admin Panel Active*", parse_mode="Markdown", reply_markup=admin_panel_keyboard())
     else:
-        msg = bot.send_message(chat_id, "🔑 કૃપા કરીને એડમિન પાસવર્ડ એન્ટર કરો:")
+        msg = bot.send_message(chat_id, "🔑 એડમિન પાસવર્ડ દાખલ કરો:")
         bot.register_next_step_handler(msg, process_admin_password)
 
 def process_admin_password(message):
     chat_id = message.chat.id
     if message.text == ADMIN_PASSWORD:
         add_admin(chat_id)
-        bot.send_message(chat_id, "✅ *અભિનંદન!* તમે Admin તરીકે વેરીફાઈ થઈ ગયા છો.", parse_mode="Markdown", reply_markup=admin_panel_keyboard())
+        bot.send_message(chat_id, "✅ *તમે Admin તરીકે સફળતાપૂર્વક લોગિન થઈ ગયા છો.*", parse_mode="Markdown", reply_markup=admin_panel_keyboard())
     else:
         bot.send_message(chat_id, "❌ ખોટો પાસવર્ડ!")
 
@@ -236,7 +237,7 @@ def handle_web_app_data(message):
     if success:
         bot.reply_to(
             message, 
-            f"🎉 *QR Verified Automatically!*\n\n🎟️ Code: `{scanned_code}`\n⏱️ Duration: *{duration}*\n\nતમારું ડિવાઇસ કનેક્ટ થઈ ગયું છે.", 
+            f"🎉 *QR Verified Successfully!*\n\n🎟️ Code: `{scanned_code}`\n⏱️ Duration: *{duration}*\n\nતમારું એકાઉન્ટ ઓટો-કનેક્ટ થઈ ગયું છે.", 
             parse_mode="Markdown"
         )
     else:
@@ -258,9 +259,9 @@ def webhook():
 
 @app.route('/', methods=['GET'])
 def index():
-    return "RoadGuardian Unified Engine Active!", 200
+    return "Highway Animal Safety Engine Active!", 200
 
-# Vercel Serverless Export
+# Vercel Deployment Handler
 app_instance = app
 
 if __name__ == "__main__":
