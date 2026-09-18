@@ -4,6 +4,7 @@ import string
 import time
 import io
 import requests
+import qrcode  # Added for QR Code generation
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import telebot
@@ -98,14 +99,29 @@ def verify_and_register_visitor(chat_id, code):
         return True, c_data.get("duration_str", "")
     return False, None
 
-# 🔒 ફક્ત અને ફક્ત Granted/Authorized વ્યક્તિઓ જ મેળવો
+# Helper to generate QR code in-memory
+def generate_qr_code_stream(data_text):
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(data_text)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    img_bytes = io.BytesIO()
+    img.save(img_bytes, format='PNG')
+    img_bytes.seek(0)
+    return img_bytes
+
 def get_active_recipients():
     recipients = set()
     now = time.time()
 
     root_data = get_firebase_data("")
     if isinstance(root_data, dict):
-        # ૧. માત્ર એડમિન્સ મેળવો
         admins = root_data.get("admins", {})
         if isinstance(admins, dict):
             for admin_id in admins.keys():
@@ -114,20 +130,17 @@ def get_active_recipients():
                 except Exception:
                     pass
 
-        # ૨. માત્ર પાસકોડ વડે વેરીફાય થયેલા યુઝર્સ મેળવો (Active Subscribers)
         subscribers = root_data.get("subscribers", {})
         if isinstance(subscribers, dict):
             for cid, sdata in subscribers.items():
                 if isinstance(sdata, dict):
                     expire_at = sdata.get("expire_at", 0)
-                    if expire_at > now: # જે નો પાસ એક્સપાયર નથી થયો તે જ મોકલાશે
+                    if expire_at > now:
                         try:
                             recipients.add(str(cid))
                         except Exception:
                             pass
 
-    # નોંધ: અહીંથી DEFAULT_CHAT_ID ની કન્ડીશન હટાવી દીધી છે.
-    # હવે જો સિસ્ટમમાં કોઈ Granted User નહિ હોય તો ઈમેજ કોઈને મોકલાશે નહીં!
     return list(recipients)
 
 
@@ -230,7 +243,7 @@ def callback_listener(call):
 
         elif call.data == "menu_visitor":
             set_user_state(chat_id, "awaiting_visitor_code")
-            bot.send_message(chat_id, "🎟️ *Visitor Access*\nPlease enter your Pass Code:")
+            bot.send_message(chat_id, "🎟️ *Visitor Access*\nPlease send or scan your Pass Code:")
 
     except Exception as e:
         print(f"Error in callback: {e}")
@@ -259,7 +272,20 @@ def handle_text_inputs(message):
             code = "PASS-" + ''.join(random.choices(string.digits, k=6))
 
             save_visitor_code(code, phone, duration)
-            bot.reply_to(message, f"✅ *Visitor Code Created!*\n\n🎟️ Code: `{code}`\n📱 Phone: {phone}\n⏱️ Duration: {duration}", parse_mode="Markdown")
+            
+            # Generate QR Code image
+            qr_stream = generate_qr_code_stream(code)
+            qr_stream.name = 'visitor_qr.png'
+
+            caption = (
+                f"✅ *Visitor Pass Created!*\n\n"
+                f"🎟️ **Pass Code:** `{code}`\n"
+                f"📱 **Phone:** {phone}\n"
+                f"⏱️ **Duration:** {duration}\n\n"
+                f"📷 *Visitors can scan this QR code or type the pass code directly.*"
+            )
+            
+            bot.send_photo(chat_id, photo=qr_stream, caption=caption, parse_mode="Markdown")
             clear_user_state(chat_id)
             return
 
@@ -275,7 +301,7 @@ def handle_text_inputs(message):
         print(f"Error handling message: {e}")
 
 
-# --- API ROUTES FOR ALERTS (STRICTLY FOR GRANTED USERS ONLY) ---
+# --- API ROUTES ---
 
 @app.route('/api/alert', methods=['POST'])
 @app.route('/alert', methods=['POST'])
@@ -360,4 +386,4 @@ def telegram_webhook():
 
 @app.route('/', methods=['GET'])
 def index_check():
-    return "🚀 Active Backend: Sending ONLY to Granted Persons!", 200
+    return "🚀 Active Backend: QR Code Generator & Alert System Enabled!", 200
