@@ -1,5 +1,8 @@
 import os
+import random
+import string
 import time
+import urllib.parse
 import requests
 from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
@@ -8,18 +11,18 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 # --- CONFIGURATION ---
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8560832618:AAFxHDrVvAEHDR1zKUtK1glQq0RWMsYrWXk")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "jashjani")
 FIREBASE_BASE_URL = os.getenv(
     "FIREBASE_BASE_URL", 
     "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian"
 )
-# તમારી Vercel/Render ડબલ્યુઈબી સાઈટની Domain લિંક દર્શાવો
-SERVER_URL = os.getenv("SERVER_URL", "https://your-domain.vercel.app") 
+SERVER_URL = os.getenv("SERVER_URL", "https://your-domain.vercel.app")
 
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = Flask(__name__)
 CORS(app)
 
-# --- GOOGLE LENS STYLE CAMERA SCANNER HTML (Embedded Directly) ---
+# --- DIRECT CAMERA SCANNER WEBAPP HTML ---
 SCANNER_HTML = """
 <!DOCTYPE html>
 <html lang="gu">
@@ -31,7 +34,7 @@ SCANNER_HTML = """
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       background: #0f172a;
       color: white;
       margin: 0;
@@ -45,19 +48,19 @@ SCANNER_HTML = """
       width: 88%;
       max-width: 380px;
       background: #1e293b;
-      border-radius: 16px;
-      padding: 16px;
+      border-radius: 20px;
+      padding: 20px;
       text-align: center;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
     }
     #reader {
       width: 100%;
-      border-radius: 12px;
+      border-radius: 15px;
       overflow: hidden;
-      border: 2px solid #38bdf8;
+      border: 3px solid #38bdf8;
     }
     .status {
-      margin-top: 12px;
+      margin-top: 15px;
       font-size: 15px;
       color: #38bdf8;
       font-weight: bold;
@@ -66,7 +69,7 @@ SCANNER_HTML = """
 </head>
 <body>
   <div class="scanner-card">
-    <h3>📷 Live QR Scanner</h3>
+    <h2>📷 Google Lens Scanner</h2>
     <p style="color: #94a3b8; font-size: 13px;">QR કોડ સામે કેમેરો રાખો, સીધું જ ઓટો-કનેક્ટ થઈ જશે.</p>
     <div id="reader"></div>
     <div class="status" id="status-text">Scanning Live...</div>
@@ -78,8 +81,7 @@ SCANNER_HTML = """
     tg.expand();
 
     function onScanSuccess(decodedText) {
-      document.getElementById('status-text').innerHTML = `<span style="color:#4ade80;">✅ Code Found: ${decodedText}</span>`;
-      
+      document.getElementById('status-text').innerHTML = `<span style="color:#4ade80;">✅ Verified: ${decodedText}</span>`;
       if (tg.sendData) {
         tg.sendData(decodedText);
       } else {
@@ -89,7 +91,7 @@ SCANNER_HTML = """
 
     let html5QrcodeScanner = new Html5QrcodeScanner(
       "reader", 
-      { fps: 15, qrbox: { width: 220, height: 220 }, facingMode: "environment" }, 
+      { fps: 15, qrbox: { width: 230, height: 230 }, facingMode: "environment" }, 
       false
     );
     html5QrcodeScanner.render(onScanSuccess);
@@ -114,6 +116,20 @@ def get_firebase_data(path):
         print(f"Firebase Get Error: {e}")
     return {}
 
+def is_admin(chat_id):
+    admins = get_firebase_data("admins")
+    return isinstance(admins, dict) and str(chat_id) in admins
+
+def add_admin(chat_id):
+    set_firebase_data(f"admins/{str(chat_id)}", True)
+
+def generate_random_code(length=6):
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+
+def get_qr_api_url(data_text):
+    encoded_text = urllib.parse.quote(data_text)
+    return f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={encoded_text}"
+
 def verify_and_register_visitor(chat_id, code):
     codes = get_firebase_data("codes")
     if isinstance(codes, dict) and code in codes:
@@ -129,24 +145,77 @@ def verify_and_register_visitor(chat_id, code):
         return True, c_data.get("duration_str", "")
     return False, None
 
-# --- TELEGRAM BOT ROUTINGS ---
+# --- UI KEYBOARDS ---
 def main_menu_keyboard():
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("🛠️ Admin Panel", callback_data="menu_admin"))
-    
-    # Direct Google Lens Camera Scanner WebApp Button
     scanner_url = f"{SERVER_URL}/scanner"
     markup.add(InlineKeyboardButton("📷 Direct Camera QR Scanner", web_app=WebAppInfo(url=scanner_url)))
     return markup
 
+def admin_panel_keyboard():
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("➕ 1 Hour Pass", callback_data="gen_1h"))
+    markup.add(InlineKeyboardButton("➕ 1 Day Pass", callback_data="gen_1d"))
+    markup.add(InlineKeyboardButton("➕ Custom Duration Pass", callback_data="gen_custom"))
+    markup.add(InlineKeyboardButton("📋 Active Codes", callback_data="list_codes"))
+    markup.add(InlineKeyboardButton("🏠 Main Menu", callback_data="menu_main"))
+    return markup
+
+# --- TELEGRAM BOT HANDLERS ---
 @bot.message_handler(commands=['start', 'menu'])
 def send_welcome(message):
     bot.send_message(
         message.chat.id, 
-        "🏠 *RoadGuardian Control System*\n\nવિઝિટર માટે સીધું જ સ્કેન કરવા નીચે આપેલ કેમેરા બટન દબાવો:", 
+        "🏠 *RoadGuardian Safety System*\n\nતમારું સ્વાગત છે! કેમેરા વડે સ્કેન કરવા માટે નીચે આપેલું બટન દબાવો:", 
         parse_mode="Markdown", 
         reply_markup=main_menu_keyboard()
     )
+
+@bot.message_handler(commands=['admin'])
+def admin_login(message):
+    chat_id = message.chat.id
+    if is_admin(chat_id):
+        bot.send_message(chat_id, "🛠️ *Admin Panel Active*", parse_mode="Markdown", reply_markup=admin_panel_keyboard())
+    else:
+        msg = bot.send_message(chat_id, "🔑 કૃપા કરીને એડમિન પાસવર્ડ એન્ટર કરો:")
+        bot.register_next_step_handler(msg, process_admin_password)
+
+def process_admin_password(message):
+    chat_id = message.chat.id
+    if message.text == ADMIN_PASSWORD:
+        add_admin(chat_id)
+        bot.send_message(chat_id, "✅ *અભિનંદન!* તમે Admin તરીકે વેરીફાઈ થઈ ગયા છો.", parse_mode="Markdown", reply_markup=admin_panel_keyboard())
+    else:
+        bot.send_message(chat_id, "❌ ખોટો પાસવર્ડ!")
+
+@bot.callback_query_handler(func=lambda call: True)
+def handle_callbacks(call):
+    chat_id = call.message.chat.id
+    data = call.data
+
+    if data == "menu_main":
+        bot.edit_message_text("🏠 *RoadGuardian Main Menu*", chat_id, call.message.message_id, parse_mode="Markdown", reply_markup=main_menu_keyboard())
+    elif data == "menu_admin":
+        if is_admin(chat_id):
+            bot.edit_message_text("🛠️ *Admin Panel*", chat_id, call.message.message_id, parse_mode="Markdown", reply_markup=admin_panel_keyboard())
+        else:
+            bot.answer_callback_query(call.id, "❌ ફક્ત Admin જ વાપરી શકે છે!")
+    elif data in ["gen_1h", "gen_1d"]:
+        if not is_admin(chat_id): return
+        dur_sec = 3600 if data == "gen_1h" else 86400
+        dur_str = "1 કલાક" if data == "gen_1h" else "1 દિવસ"
+        code = generate_random_code()
+        
+        set_firebase_data(f"codes/{code}", {"dur_sec": dur_sec, "duration_str": dur_str, "created_at": time.time()})
+        qr_url = get_qr_api_url(code)
+        
+        bot.send_photo(
+            chat_id, 
+            photo=qr_url, 
+            caption=f"🎟️ *નવો QR Pass તૈયાર છે!*\n\n👉 Code: `{code}`\n⏱️ Duration: *{dur_str}*", 
+            parse_mode="Markdown"
+        )
 
 @bot.message_handler(content_types=['web_app_data'])
 def handle_web_app_data(message):
@@ -157,16 +226,15 @@ def handle_web_app_data(message):
     if success:
         bot.reply_to(
             message, 
-            f"🎉 *QR Verified Automatically!*\n\n🎟️ Code: `{scanned_code}`\n⏱️ Duration Active: *{duration}*\n\nતમે સફળતાપૂર્વક કનેક્ટ થઈ ગયા છો. લાઈવ એલર્ટ્સ ચાલુ કરી દેવાયા છે.", 
+            f"🎉 *QR Verified Automatically!*\n\n🎟️ Code: `{scanned_code}`\n⏱️ Duration: *{duration}*\n\nતમારું ડિવાઇસ કનેક્ટ થઈ ગયું છે. લાઈવ સેફ્ટી એલર્ટ મોકલવામાં આવશે.", 
             parse_mode="Markdown"
         )
     else:
-        bot.reply_to(message, f"❌ અમાન્ય અથવા એક્સપાયર થયેલ QR Code: `{scanned_code}`", parse_mode="Markdown")
+        bot.reply_to(message, f"❌ અમાન્ય QR Code: `{scanned_code}`", parse_mode="Markdown")
 
 # --- FLASK ROUTES ---
 @app.route('/scanner', methods=['GET'])
 def serve_scanner():
-    # Direct HTML Camera View Render
     return render_template_string(SCANNER_HTML)
 
 @app.route('/webhook', methods=['POST'])
@@ -180,10 +248,7 @@ def webhook():
 
 @app.route('/', methods=['GET'])
 def index():
-    return "RoadGuardian Unified All-in-One Engine Active!", 200
-
-# Server Instance
-app_instance = app
+    return "RoadGuardian Unified System Active!", 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
