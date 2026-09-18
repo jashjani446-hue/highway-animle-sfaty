@@ -3,11 +3,12 @@ import random
 import string
 import time
 import io
+import urllib.parse
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
 import telebot
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 # Environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8560832618:AAFxHDrVvAEHDR1zKUtK1glQq0RWMsYrWXk")
@@ -16,10 +17,95 @@ FIREBASE_BASE_URL = os.getenv(
     "FIREBASE_BASE_URL", 
     "https://roadguardianai-a8d23-default-rtdb.asia-southeast1.firebasedatabase.app/RoadGuardian"
 )
+SERVER_URL = os.getenv("SERVER_URL", "https://highway-animle-sfaty.vercel.app")
 
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = Flask(__name__)
 CORS(app)
+
+# --- DIRECT CAMERA SCANNER WEBAPP HTML (AUTO-CLOSE & AUTO-SEND) ---
+SCANNER_HTML = """
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Lens QR Scanner</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: white;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .scanner-card {
+      width: 88%;
+      max-width: 380px;
+      background: #1e293b;
+      border-radius: 20px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    #reader {
+      width: 100%;
+      border-radius: 15px;
+      overflow: hidden;
+      border: 3px solid #38bdf8;
+    }
+    .status {
+      margin-top: 15px;
+      font-size: 15px;
+      color: #38bdf8;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="scanner-card">
+    <h2>📷 Google Lens Scanner</h2>
+    <p style="color: #94a3b8; font-size: 13px;">QR કોડ સામે કેમેરો રાખો, સીધું જ ઓટો-કનેક્ટ થઈ જશે.</p>
+    <div id="reader"></div>
+    <div class="status" id="status-text">Scanning Live...</div>
+  </div>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+
+    function onScanSuccess(decodedText) {
+      document.getElementById('status-text').innerHTML = `<span style="color:#4ade80;">✅ Code Found! Closing Camera...</span>`;
+      
+      // ૧. Telegram Chat માં કોડ મોકલો
+      if (tg.sendData) {
+        tg.sendData(decodedText);
+        // ૨. કેમેરો બંધ કરી ચેટમાં ઓટોમેટિક પાછા જાઓ
+        setTimeout(() => {
+          tg.close();
+        }, 500);
+      } else {
+        alert("Scanned Code: " + decodedText);
+      }
+    }
+
+    let html5QrcodeScanner = new Html5QrcodeScanner(
+      "reader", 
+      { fps: 15, qrbox: { width: 230, height: 230 }, facingMode: "environment" }, 
+      false
+    );
+    html5QrcodeScanner.render(onScanSuccess);
+  </script>
+</body>
+</html>
+"""
 
 # --- FIREBASE HELPER FUNCTIONS ---
 
@@ -81,6 +167,10 @@ def save_visitor_code(code, phone, duration_str):
     }
     set_firebase_data(f"codes/{code}", code_data)
 
+def get_qr_api_url(data_text):
+    encoded_text = urllib.parse.quote(data_text)
+    return f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={encoded_text}"
+
 def verify_and_register_visitor(chat_id, code):
     codes = get_firebase_data("codes")
     if isinstance(codes, dict) and code in codes:
@@ -132,6 +222,10 @@ def main_menu_keyboard(chat_id):
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("🛠️ Admin Panel", callback_data="menu_admin"))
     markup.add(InlineKeyboardButton("👤 Visitor Access", callback_data="menu_visitor"))
+    
+    # Direct Camera QR Scanner WebApp Button
+    scanner_url = f"{SERVER_URL}/scanner"
+    markup.add(InlineKeyboardButton("📷 Direct Camera QR Scanner", web_app=WebAppInfo(url=scanner_url)))
     return markup
 
 def admin_menu_keyboard():
@@ -207,10 +301,28 @@ def callback_listener(call):
 
         elif call.data == "menu_visitor":
             set_user_state(chat_id, "awaiting_visitor_code")
-            bot.send_message(chat_id, "🎟️ *Visitor Access*\nPlease enter your Pass Code:")
+            bot.send_message(chat_id, "🎟️ *Visitor Access*\nPlease enter your Pass Code or use Direct Camera Scanner:")
 
     except Exception as e:
         print(f"Error in callback: {e}")
+
+
+# 📷 MINI APP CAMERA QR DATA AUTO-RECEIVER
+@bot.message_handler(content_types=['web_app_data'])
+def handle_web_app_data(message):
+    chat_id = message.chat.id
+    scanned_code = message.web_app_data.data.strip()
+
+    success, duration = verify_and_register_visitor(chat_id, scanned_code)
+    if success:
+        bot.reply_to(
+            message, 
+            f"🎉 *Pass Code Detected & Access Granted!*\n\n🎟️ Pass Code: `{scanned_code}`\n⏱️ Duration Active: *{duration}*\n\nWelcome! You will now receive live safety alerts on this chat.", 
+            parse_mode="Markdown"
+        )
+    else:
+        bot.reply_to(message, f"❌ Invalid or Expired Pass Code Scanned: `{scanned_code}`", parse_mode="Markdown")
+    clear_user_state(chat_id)
 
 
 @bot.message_handler(func=lambda message: True)
@@ -232,22 +344,23 @@ def handle_text_inputs(message):
             clear_user_state(chat_id)
             return
 
-        # 🎫 Generate Visitor Pass Code
+        # 🎫 Generate Visitor Pass Code With API QR Code Image
         if isinstance(state, dict) and state.get("action") == "awaiting_phone":
             duration = state.get("duration")
             phone = text
             code = "PASS-" + ''.join(random.choices(string.digits, k=6))
 
             save_visitor_code(code, phone, duration)
+            qr_url = get_qr_api_url(code)
 
             caption = (
                 f"✅ *Visitor Pass Code Created!*\n\n"
                 f"🎟️ Pass Code: `{code}`\n"
                 f"📱 Phone: {phone}\n"
                 f"⏱️ Duration: {duration}\n\n"
-                f"📲 *Give this code to the visitor to authorize their Telegram.*"
+                f"📲 *Give this QR Code / Pass Code to the visitor to authorize their Telegram.*"
             )
-            bot.send_message(chat_id, caption, parse_mode="Markdown")
+            bot.send_photo(chat_id, photo=qr_url, caption=caption, parse_mode="Markdown")
             clear_user_state(chat_id)
             return
 
@@ -264,9 +377,13 @@ def handle_text_inputs(message):
         print(f"Error handling message: {e}")
 
 
-# --- API ENDPOINTS FOR HTML WEB ALERTS ---
+# --- FLASK ROUTES & API ENDPOINTS ---
 
-# 🛣️ Highway Alert API Route (Matches your HTML fetch call)
+@app.route('/scanner', methods=['GET'])
+def serve_scanner():
+    return render_template_string(SCANNER_HTML)
+
+# 🛣️ Highway Alert API Route
 @app.route('/api/alert', methods=['POST'])
 @app.route('/alert', methods=['POST'])
 def receive_highway_alert():
@@ -301,7 +418,7 @@ def receive_highway_alert():
     return jsonify({"status": "Highway Alert sent", "sent_to_count": success_count}), 200
 
 
-# 🌲 Forest Alert API Route (Matches your HTML fetch call)
+# 🌲 Forest Alert API Route
 @app.route('/api/forest-alert', methods=['POST'])
 @app.route('/forest-alert', methods=['POST'])
 def receive_forest_alert():
@@ -361,3 +478,6 @@ def index_check():
 
 # Vercel Serverless Hook
 app_instance = app
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
