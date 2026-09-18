@@ -1,4 +1,4 @@
-Flask==3.0.0
-flask-cors==4.0.0
-pyTelegramBotAPI==4.14.0
-requests==2.31.0
+Flask
+pyTelegramBotAPI
+requests
+flask-cors
