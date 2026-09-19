@@ -20,16 +20,16 @@
       "dest": "main.py"
     },
     {
-      "src": "/scanner",
-      "dest": "main.py"
-    },
-    {
       "src": "/alert",
       "dest": "main.py"
     },
     {
       "src": "/forest-alert",
       "dest": "main.py"
+    },
+    {
+      "src": "/scanner",
+      "dest": "/scanner.html"
     },
     {
       "src": "/forest.html",
